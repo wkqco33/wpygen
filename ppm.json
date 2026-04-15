@@ -1,0 +1,5 @@
+{
+  "description": "uv 기반 Python 프로젝트 템플릿 생성기",
+  "author": "wkqco",
+  "bin_name": "wpygen"
+}
