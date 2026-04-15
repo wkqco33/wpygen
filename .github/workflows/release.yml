@@ -23,7 +23,7 @@ jobs:
             arch: amd64
             archive: tar.gz
             bin_ext: ""
-          - runner: macos-13
+          - runner: macos-15-intel
             target: x86_64-apple-darwin
             os: darwin
             arch: amd64
