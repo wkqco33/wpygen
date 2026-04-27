@@ -220,6 +220,6 @@ cargo fmt
 ## 참고
 
 - 기본 내부 인덱스 URL은 `https://pypi.wkqcosoft.cloud`
-- CLI 템플릿은 현재 `wpycli>=0.1.1` 기준으로 생성
+- 템플릿 생성 후 `uv sync` 시점에 사설 서버의 최신 패키지 버전을 자동으로 가져옵니다.
 - 생성된 프로젝트 안에서도 `uv sync` 기준으로 바로 사용할 수 있게 구성됨
 - `ppm`용 릴리스 아티팩트는 GitHub Actions `release` 워크플로우에서 생성됨

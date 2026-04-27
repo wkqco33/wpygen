@@ -108,9 +108,9 @@ mod tests {
     #[test]
     fn cli_pyproject_uses_private_packages() {
         let rendered = common::build_pyproject(&spec(TemplateKind::Cli, false));
-        assert!(rendered.contains("\"wconfig>=0.1.0\""));
-        assert!(rendered.contains("\"wlogger>=0.2.7\""));
-        assert!(rendered.contains("\"wpycli>=0.1.1\""));
+        assert!(rendered.contains("\"wconfig\""));
+        assert!(rendered.contains("\"wlogger\""));
+        assert!(rendered.contains("\"wpycli\""));
         assert!(rendered.contains("[[tool.uv.index]]"));
         assert!(rendered.contains("url = \"https://pypi.wkqcosoft.cloud\""));
     }
@@ -140,7 +140,7 @@ mod tests {
     #[test]
     fn gui_template_contains_pyside6_dependency() {
         let rendered = common::build_pyproject(&spec(TemplateKind::Gui, false));
-        assert!(rendered.contains("\"PySide6>=6.7.0\""));
+        assert!(rendered.contains("\"PySide6\""));
     }
 
     #[test]

@@ -2,27 +2,27 @@ use crate::models::{ProjectSpec, TemplateKind};
 
 pub(crate) fn build_pyproject(spec: &ProjectSpec) -> String {
     let mut dependencies = vec![
-        "\"wconfig>=0.1.0\"".to_string(),
-        "\"wlogger>=0.2.7\"".to_string(),
+        "\"wconfig\"".to_string(),
+        "\"wlogger\"".to_string(),
     ];
     let mut dev_dependencies = Vec::new();
 
     match spec.template {
         TemplateKind::Cli => {
-            dependencies.push("\"wpycli>=0.1.1\"".to_string());
+            dependencies.push("\"wpycli\"".to_string());
         }
         TemplateKind::Gui => {
-            dependencies.push("\"PySide6>=6.7.0\"".to_string());
+            dependencies.push("\"PySide6\"".to_string());
         }
         TemplateKind::Server => {
-            dependencies.push("\"fastapi>=0.115.0\"".to_string());
-            dependencies.push("\"uvicorn>=0.34.0\"".to_string());
+            dependencies.push("\"fastapi\"".to_string());
+            dependencies.push("\"uvicorn\"".to_string());
         }
     }
 
     if spec.grpc {
-        dependencies.push("\"grpcio>=1.71.0\"".to_string());
-        dev_dependencies.push("\"grpcio-tools>=1.71.0\"".to_string());
+        dependencies.push("\"grpcio\"".to_string());
+        dev_dependencies.push("\"grpcio-tools\"".to_string());
     }
 
     let script_name = spec.project_name.replace('_', "-");
