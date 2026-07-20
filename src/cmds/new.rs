@@ -57,7 +57,7 @@ pub fn run(args: NewArgs) -> Result<(), Error> {
 }
 
 pub fn normalize_package_name(raw: &str) -> Result<String, Error> {
-    let normalized = raw
+    let mapped = raw
         .trim()
         .chars()
         .map(|ch| match ch {
@@ -68,13 +68,22 @@ pub fn normalize_package_name(raw: &str) -> Result<String, Error> {
         })
         .collect::<String>();
 
-    if normalized.is_empty()
-        || normalized.starts_with(|ch: char| ch.is_ascii_digit())
-        || normalized.contains('\0')
-        || !normalized
-            .chars()
-            .all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '_')
-    {
+    if mapped.contains('\0') {
+        return Err(Error::InvalidPackageName(raw.to_string()));
+    }
+
+    // 연속된 `-`/공백이 `_`로 겹쳐 치환되면서 `__`가 생기지 않도록 인접 언더바를 합치고,
+    // 앞뒤 언더바는 잘라낸다 (예: "my--app-" -> "my_app").
+    let mut normalized = String::with_capacity(mapped.len());
+    for ch in mapped.chars() {
+        if ch == '_' && normalized.ends_with('_') {
+            continue;
+        }
+        normalized.push(ch);
+    }
+    let normalized = normalized.trim_matches('_').to_string();
+
+    if normalized.is_empty() || normalized.starts_with(|ch: char| ch.is_ascii_digit()) {
         return Err(Error::InvalidPackageName(raw.to_string()));
     }
 
@@ -121,6 +130,15 @@ mod tests {
     #[test]
     fn normalizes_package_name() {
         assert_eq!(normalize_package_name("My App-CLI").unwrap(), "my_app_cli");
+    }
+
+    #[test]
+    fn collapses_consecutive_and_trims_boundary_underscores() {
+        assert_eq!(
+            normalize_package_name("My  App--CLI-").unwrap(),
+            "my_app_cli"
+        );
+        assert_eq!(normalize_package_name("-demo-app-").unwrap(), "demo_app");
     }
 
     #[test]
