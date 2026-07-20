@@ -112,12 +112,11 @@ pub(crate) fn build_main(spec: &ProjectSpec) -> String {
     format!(
         r#"from __future__ import annotations
 
-from fastapi import FastAPI
 import uvicorn
+from fastapi import FastAPI
 
-from .logging import get_logger, setup_logging
+{sqlite_import}from .logging import get_logger, setup_logging
 from .settings import load_app_config
-{sqlite_import}
 
 CONFIG = load_app_config()
 setup_logging(CONFIG)
@@ -147,5 +146,24 @@ if __name__ == "__main__":
         sqlite_import = sqlite_import,
         sqlite_init = sqlite_init,
         sqlite_health = sqlite_health,
+    )
+}
+
+pub(crate) fn build_smoke_test(spec: &ProjectSpec) -> String {
+    format!(
+        r#"from __future__ import annotations
+
+from fastapi.testclient import TestClient
+
+from {package_name}.main import app
+
+client = TestClient(app)
+
+
+def test_health():
+    response = client.get("/health")
+    assert response.status_code == 200
+"#,
+        package_name = spec.package_name,
     )
 }

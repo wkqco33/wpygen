@@ -1,9 +1,10 @@
 use crate::cli::NewArgs;
 use crate::error::Error;
 use crate::models::ProjectSpec;
-use crate::services::writer;
+use crate::services::{process, writer};
 
 pub fn run(args: NewArgs) -> Result<(), Error> {
+    validate_project_name(&args.name)?;
     let package_name = normalize_package_name(args.package_name.as_deref().unwrap_or(&args.name))?;
     let project_name = args.name;
     let output_root = args.output;
@@ -18,7 +19,18 @@ pub fn run(args: NewArgs) -> Result<(), Error> {
     };
 
     let target_dir = output_root.join(&project_name);
-    let file_count = writer::create_project(&target_dir, &spec, args.force)?;
+
+    if args.dry_run {
+        let files = writer::preview(&target_dir, &spec, args.force)?;
+        println!("dry-run: {} 아래 생성될 파일 목록", target_dir.display());
+        for path in &files {
+            println!("  {}", path.display());
+        }
+        println!("(dry-run 모드이므로 실제 파일은 생성되지 않았습니다)");
+        return Ok(());
+    }
+
+    let file_count = writer::create_project(&target_dir, &spec, args.force, args.verbose)?;
 
     println!(
         "생성 완료: {} (template={}, grpc={}, sqlite={}, files={})",
@@ -28,6 +40,19 @@ pub fn run(args: NewArgs) -> Result<(), Error> {
         if spec.sqlite { "on" } else { "off" },
         file_count
     );
+
+    if args.git {
+        process::run(&target_dir, "git", &["init"])?;
+        process::run(&target_dir, "git", &["add", "-A"])?;
+        process::run(&target_dir, "git", &["commit", "-m", "wpygen init"])?;
+        println!("git 저장소 초기화 및 최초 커밋 완료");
+    }
+
+    if args.sync {
+        process::run(&target_dir, "uv", &["sync"])?;
+        println!("uv sync 완료");
+    }
+
     Ok(())
 }
 
@@ -54,6 +79,26 @@ pub fn normalize_package_name(raw: &str) -> Result<String, Error> {
     }
 
     Ok(normalized)
+}
+
+/// `project_name`은 그대로 생성된 `pyproject.toml`의 `[project] name`(배포 패키지명)으로
+/// 쓰이므로, PEP 508 배포명 규칙(첫/끝 글자는 영문자·숫자, 나머지는 `-`, `_`, `.`도 허용)을
+/// 만족하는지 미리 검증한다. 그렇지 않으면 `uv sync` 시점에야 실패하게 된다.
+pub fn validate_project_name(name: &str) -> Result<(), Error> {
+    let boundary_ok = name
+        .chars()
+        .next()
+        .zip(name.chars().last())
+        .is_some_and(|(first, last)| first.is_ascii_alphanumeric() && last.is_ascii_alphanumeric());
+    let chars_ok = name
+        .chars()
+        .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '.'));
+
+    if boundary_ok && chars_ok {
+        Ok(())
+    } else {
+        Err(Error::InvalidProjectName(name.to_string()))
+    }
 }
 
 #[cfg(test)]
@@ -91,6 +136,34 @@ mod tests {
     }
 
     #[test]
+    fn accepts_valid_project_names() {
+        assert!(validate_project_name("demo-app").is_ok());
+        assert!(validate_project_name("demo_app").is_ok());
+        assert!(validate_project_name("demo.app").is_ok());
+        assert!(validate_project_name("a").is_ok());
+    }
+
+    #[test]
+    fn rejects_invalid_project_names() {
+        assert!(matches!(
+            validate_project_name("demo_app_"),
+            Err(Error::InvalidProjectName(_))
+        ));
+        assert!(matches!(
+            validate_project_name("-demo"),
+            Err(Error::InvalidProjectName(_))
+        ));
+        assert!(matches!(
+            validate_project_name("demo app"),
+            Err(Error::InvalidProjectName(_))
+        ));
+        assert!(matches!(
+            validate_project_name(""),
+            Err(Error::InvalidProjectName(_))
+        ));
+    }
+
+    #[test]
     fn creates_cli_project_files() {
         let target_dir = unique_temp_dir("cli");
         let spec = ProjectSpec {
@@ -102,14 +175,16 @@ mod tests {
             index_url: "https://pypi.wkqcosoft.cloud".to_string(),
         };
 
-        let file_count = writer::create_project(&target_dir, &spec, false).unwrap();
+        let file_count = writer::create_project(&target_dir, &spec, false, false).unwrap();
 
-        assert!(file_count >= 7);
+        assert!(file_count >= 9);
         assert!(target_dir.join("pyproject.toml").exists());
         assert!(target_dir.join("README.md").exists());
         assert!(target_dir.join("src/demo_app/main.py").exists());
         assert!(target_dir.join("proto/demo_app.proto").exists());
         assert!(target_dir.join("src/demo_app/database.py").exists());
+        assert!(target_dir.join("tests/test_smoke.py").exists());
+        assert!(target_dir.join(".github/workflows/ci.yml").exists());
 
         let _ = fs::remove_dir_all(target_dir);
     }

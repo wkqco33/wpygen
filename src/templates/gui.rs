@@ -110,9 +110,8 @@ import sys
 
 from PySide6.QtWidgets import QApplication, QLabel, QMainWindow, QVBoxLayout, QWidget
 
-from .logging import get_logger, setup_logging
+{sqlite_import}from .logging import get_logger, setup_logging
 from .settings import AppConfig, load_app_config
-{sqlite_import}
 
 
 class MainWindow(QMainWindow):
@@ -153,5 +152,20 @@ if __name__ == "__main__":
         sqlite_import = sqlite_import,
         grpc_note = grpc_note,
         sqlite_init = sqlite_init,
+    )
+}
+
+pub(crate) fn build_smoke_test(spec: &ProjectSpec) -> String {
+    format!(
+        r#"from __future__ import annotations
+
+from {package_name}.settings import load_app_config
+
+
+def test_load_app_config_defaults():
+    config = load_app_config()
+    assert config.app_name
+"#,
+        package_name = spec.package_name,
     )
 }

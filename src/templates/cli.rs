@@ -5,7 +5,7 @@ use super::common;
 pub(crate) fn build_main(spec: &ProjectSpec) -> String {
     let env_prefix = common::env_prefix(spec);
     let sqlite_import = if spec.sqlite {
-        "from .database import initialize_database\n"
+        "from .database import initialize_database\n\n"
     } else {
         ""
     };
@@ -50,9 +50,8 @@ def run_db_init(ctx):
 import json
 
 from wpycli import Command, ConfigSettings, LoggingSettings
-{sqlite_import}
 
-APP_NAME = "{project_name}"
+{sqlite_import}APP_NAME = "{project_name}"
 
 
 def build_root() -> Command:
@@ -132,5 +131,20 @@ if __name__ == "__main__":
         sqlite_commands = sqlite_commands,
         grpc_hint = grpc_hint,
         sqlite_function = sqlite_function,
+    )
+}
+
+pub(crate) fn build_smoke_test(spec: &ProjectSpec) -> String {
+    format!(
+        r#"from __future__ import annotations
+
+from {package_name}.main import build_root
+
+
+def test_build_root():
+    root = build_root()
+    assert root is not None
+"#,
+        package_name = spec.package_name,
     )
 }

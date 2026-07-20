@@ -1,11 +1,8 @@
 use crate::models::{ProjectSpec, TemplateKind};
 
 pub(crate) fn build_pyproject(spec: &ProjectSpec) -> String {
-    let mut dependencies = vec![
-        "\"wconfig\"".to_string(),
-        "\"wlogger\"".to_string(),
-    ];
-    let mut dev_dependencies = Vec::new();
+    let mut dependencies = vec!["\"wconfig\"".to_string(), "\"wlogger\"".to_string()];
+    let mut dev_dependencies = vec!["\"ruff\"".to_string(), "\"pytest\"".to_string()];
 
     match spec.template {
         TemplateKind::Cli => {
@@ -17,6 +14,7 @@ pub(crate) fn build_pyproject(spec: &ProjectSpec) -> String {
         TemplateKind::Server => {
             dependencies.push("\"fastapi\"".to_string());
             dependencies.push("\"uvicorn\"".to_string());
+            dev_dependencies.push("\"httpx\"".to_string());
         }
     }
 
@@ -64,6 +62,13 @@ package = true
 [[tool.uv.index]]
 name = "wkqcosoft"
 url = "{index_url}"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I"]
 {dev_group_section}"#,
         project_name = spec.project_name,
         description = project_description(spec.template),
@@ -110,7 +115,7 @@ pub(crate) fn build_readme(spec: &ProjectSpec) -> String {
     };
 
     format!(
-        "# {name}\n\n{description}\n\n## 시작하기\n1. `uv sync`\n2. `cp .env.example .env`\n3. `{run_command}`\n\n## 구성\n- 공통 의존성: `wconfig`, `wlogger`\n{extra_notes}- 사설 인덱스: `{index_url}`\n- 패키지 경로: `src/{package_name}`\n{sqlite_notes}{grpc_notes}",
+        "# {name}\n\n{description}\n\n## 시작하기\n1. `uv sync`\n2. `{run_command}`\n\n(`.env` 파일은 기본값으로 이미 생성되어 있습니다. 필요하면 직접 수정하세요.)\n\n## 구성\n- 공통 의존성: `wconfig`, `wlogger`\n{extra_notes}- 사설 인덱스: `{index_url}`\n- 패키지 경로: `src/{package_name}`\n{sqlite_notes}{grpc_notes}\n## 개발\n- 개발 의존성 설치: `uv sync --group dev`\n- 린트: `uv run ruff check .`\n- 테스트: `uv run pytest`\n",
         name = spec.project_name,
         description = readme_description(spec.template),
         run_command = run_command,
@@ -221,6 +226,35 @@ level = "INFO"
     };
 
     base + &sqlite_section
+}
+
+pub(crate) fn build_project_ci_workflow() -> String {
+    r#"name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+
+      - name: Install dependencies
+        run: uv sync --group dev
+
+      - name: Lint
+        run: uv run ruff check .
+
+      - name: Test
+        run: uv run pytest
+"#
+    .to_string()
 }
 
 pub(crate) fn build_shared_logging(spec: &ProjectSpec) -> String {

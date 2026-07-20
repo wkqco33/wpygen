@@ -97,7 +97,20 @@ wpygen new [OPTIONS] --template <cli|gui|server> <NAME>
 | `-o, --output` | 생성할 상위 디렉터리 |
 | `--package-name` | Python 패키지명 직접 지정 |
 | `--force` | 대상 디렉터리가 비어있지 않아도 생성 |
+| `-v, --verbose` | 생성 진행 상황을 상세히 출력 |
+| `--dry-run` | 실제로 쓰지 않고 생성될 파일 목록만 출력 (`--git`/`--sync`와 동시 사용 불가) |
+| `--git` | 생성 후 `git init` + 최초 커밋 실행 |
+| `--sync` | 생성 후 `uv sync` 실행 |
 | `--index-url` | 사설 패키지 인덱스 URL 변경 |
+
+## 쉘 자동완성
+
+```bash
+# bash
+wpygen completions bash > /etc/bash_completion.d/wpygen
+# zsh
+wpygen completions zsh > "${fpath[1]}/_wpygen"
+```
 
 ## 예시
 
