@@ -34,6 +34,7 @@ ROOT_DIR = Path(__file__).resolve().parents[1]
 PROTO_DIR = ROOT_DIR / "proto"
 OUT_DIR = ROOT_DIR / "src" / "{package_name}" / "grpc"
 PROTO_FILE = PROTO_DIR / "{package_name}.proto"
+PB2_GRPC_FILE = OUT_DIR / "{package_name}_pb2_grpc.py"
 
 
 def main() -> int:
@@ -45,7 +46,19 @@ def main() -> int:
         f"--grpc_python_out={{OUT_DIR}}",
         str(PROTO_FILE),
     ]
-    return int(protoc.main(args))
+    result = int(protoc.main(args))
+    if result != 0:
+        return result
+
+    generated = PB2_GRPC_FILE.read_text(encoding="utf-8")
+    absolute_import = "import {package_name}_pb2 as "
+    relative_import = "from . import {package_name}_pb2 as "
+    if absolute_import in generated and relative_import not in generated:
+        PB2_GRPC_FILE.write_text(
+            generated.replace(absolute_import, relative_import, 1),
+            encoding="utf-8",
+        )
+    return 0
 
 
 if __name__ == "__main__":

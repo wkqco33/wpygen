@@ -109,12 +109,41 @@ fn write_files(staging_dir: &Path, files: &[GeneratedFile], verbose: bool) -> Re
 }
 
 /// 스테이징 디렉터리를 최종 대상 경로로 옮긴다. 대상이 이미 존재하면(=`force`로
-/// 허용된 경우) 통째로 지운 뒤 옮겨서, 이전 생성 결과의 잔존 파일이 섞이지 않게 한다.
+/// 허용된 경우) 먼저 백업한 뒤 교체하고, 교체에 실패하면 원래 경로를 복원한다.
 fn replace_target_dir(target_dir: &Path, staging_dir: &Path) -> Result<(), Error> {
-    if target_dir.exists() {
-        fs::remove_dir_all(target_dir).map_err(io_err(target_dir))?;
+    if !target_dir.exists() {
+        return fs::rename(staging_dir, target_dir).map_err(io_err(target_dir));
     }
-    fs::rename(staging_dir, target_dir).map_err(io_err(target_dir))
+
+    let backup_dir = target_dir.with_file_name(format!(
+        ".{}.wpygen-backup-{}",
+        target_dir
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("project"),
+        unique_suffix()
+    ));
+    fs::rename(target_dir, &backup_dir).map_err(io_err(target_dir))?;
+
+    if let Err(err) = fs::rename(staging_dir, target_dir) {
+        if let Err(restore_err) = fs::rename(&backup_dir, target_dir) {
+            return Err(Error::RestoreFailed {
+                target: target_dir.to_path_buf(),
+                replace_source: err,
+                restore_source: restore_err,
+            });
+        }
+        return Err(io_err(target_dir)(err));
+    }
+
+    fs::remove_dir_all(&backup_dir).map_err(io_err(&backup_dir))
+}
+
+fn unique_suffix() -> u128 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_nanos())
+        .unwrap_or_default()
 }
 
 fn io_err(path: &Path) -> impl FnOnce(io::Error) -> Error {
@@ -143,7 +172,6 @@ mod tests {
             template: TemplateKind::Cli,
             grpc: false,
             sqlite: false,
-            index_url: "https://pypi.wkqcosoft.cloud".to_string(),
         }
     }
 

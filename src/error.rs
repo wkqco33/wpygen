@@ -12,6 +12,11 @@ pub enum Error {
         path: PathBuf,
         source: io::Error,
     },
+    RestoreFailed {
+        target: PathBuf,
+        replace_source: io::Error,
+        restore_source: io::Error,
+    },
     CommandFailed {
         command: String,
         status: Option<i32>,
@@ -27,7 +32,7 @@ impl Error {
             | Self::InvalidProjectName(_)
             | Self::TargetPathIsFile(_)
             | Self::TargetDirectoryNotEmpty(_) => 2,
-            Self::Io { .. } | Self::CommandFailed { .. } => 1,
+            Self::Io { .. } | Self::RestoreFailed { .. } | Self::CommandFailed { .. } => 1,
         }
     }
 }
@@ -60,6 +65,18 @@ impl fmt::Display for Error {
             Self::Io { path, source } => {
                 write!(f, "{}: {}", path.display(), source)
             }
+            Self::RestoreFailed {
+                target,
+                replace_source,
+                restore_source,
+            } => write!(
+                f,
+                "대상 디렉터리 교체에 실패했고 원래 디렉터리 복원도 실패했습니다: {} \
+                 (교체 오류: {}; 복원 오류: {})",
+                target.display(),
+                replace_source,
+                restore_source
+            ),
             Self::CommandFailed { command, status } => match status {
                 Some(code) => write!(f, "명령 실행 실패: {command} (exit code {code})"),
                 None => write!(
@@ -75,6 +92,7 @@ impl std::error::Error for Error {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Self::Io { source, .. } => Some(source),
+            Self::RestoreFailed { replace_source, .. } => Some(replace_source),
             _ => None,
         }
     }

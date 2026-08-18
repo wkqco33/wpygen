@@ -24,5 +24,4 @@ pub struct ProjectSpec {
     pub template: TemplateKind,
     pub grpc: bool,
     pub sqlite: bool,
-    pub index_url: String,
 }

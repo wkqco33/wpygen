@@ -15,7 +15,6 @@ pub fn run(args: NewArgs) -> Result<(), Error> {
         template: args.template,
         grpc: args.grpc,
         sqlite: args.sqlite,
-        index_url: args.index_url,
     };
 
     let target_dir = output_root.join(&project_name);
@@ -49,8 +48,19 @@ pub fn run(args: NewArgs) -> Result<(), Error> {
     }
 
     if args.sync {
-        process::run(&target_dir, "uv", &["sync"])?;
+        if args.lock {
+            process::run(&target_dir, "uv", &["lock"])?;
+        }
+        let sync_args: &[&str] = if args.lock {
+            &["sync", "--locked"]
+        } else {
+            &["sync"]
+        };
+        process::run(&target_dir, "uv", sync_args)?;
         println!("uv sync 완료");
+    } else if args.lock {
+        process::run(&target_dir, "uv", &["lock"])?;
+        println!("uv lock 완료");
     }
 
     Ok(())
@@ -190,7 +200,6 @@ mod tests {
             template: TemplateKind::Cli,
             grpc: true,
             sqlite: true,
-            index_url: "https://pypi.wkqcosoft.cloud".to_string(),
         };
 
         let file_count = writer::create_project(&target_dir, &spec, false, false).unwrap();

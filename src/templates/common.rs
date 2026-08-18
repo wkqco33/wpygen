@@ -1,7 +1,7 @@
 use crate::models::{ProjectSpec, TemplateKind};
 
 pub(crate) fn build_pyproject(spec: &ProjectSpec) -> String {
-    let mut dependencies = vec!["\"wconfig\"".to_string(), "\"wlogger\"".to_string()];
+    let mut dependencies = vec!["\"wpyconf\"".to_string(), "\"wpylog\"".to_string()];
     let mut dev_dependencies = vec!["\"ruff\"".to_string(), "\"pytest\"".to_string()];
 
     match spec.template {
@@ -59,10 +59,6 @@ allow-direct-references = true
 [tool.uv]
 package = true
 
-[[tool.uv.index]]
-name = "wkqcosoft"
-url = "{index_url}"
-
 [tool.ruff]
 target-version = "py312"
 line-length = 100
@@ -74,7 +70,6 @@ select = ["E4", "E7", "E9", "F", "I"]
         description = project_description(spec.template),
         dependencies = dependencies.join(",\n    "),
         script_section = script_section.trim_end(),
-        index_url = spec.index_url,
         dev_group_section = dev_group_section,
     )
 }
@@ -90,7 +85,7 @@ pub(crate) fn build_readme(spec: &ProjectSpec) -> String {
     };
     let extra_notes = match spec.template {
         TemplateKind::Cli => {
-            "- `wpycli` 기반 커맨드 구조와 `wconfig`/`wlogger` 런타임 연동이 포함되어 있습니다.\n"
+            "- `wpycli` 기반 커맨드 구조와 `wpyconf`/`wpylog` 런타임 연동이 포함되어 있습니다.\n"
         }
         TemplateKind::Gui => "- `PySide6` 기반 메인 윈도우 예제가 포함되어 있습니다.\n",
         TemplateKind::Server => {
@@ -115,12 +110,11 @@ pub(crate) fn build_readme(spec: &ProjectSpec) -> String {
     };
 
     format!(
-        "# {name}\n\n{description}\n\n## 시작하기\n1. `uv sync`\n2. `{run_command}`\n\n(`.env` 파일은 기본값으로 이미 생성되어 있습니다. 필요하면 직접 수정하세요.)\n\n## 구성\n- 공통 의존성: `wconfig`, `wlogger`\n{extra_notes}- 사설 인덱스: `{index_url}`\n- 패키지 경로: `src/{package_name}`\n{sqlite_notes}{grpc_notes}\n## 개발\n- 개발 의존성 설치: `uv sync --group dev`\n- 린트: `uv run ruff check .`\n- 테스트: `uv run pytest`\n",
+        "# {name}\n\n{description}\n\n## 시작하기\n1. `uv sync`\n2. `{run_command}`\n\n(`.env` 파일은 기본값으로 이미 생성되어 있습니다. 필요하면 직접 수정하세요.)\n\n## 구성\n- 공통 의존성: `wpyconf`, `wpylog` (import: `wconfig`, `wlogger`)\n{extra_notes}- 패키지 인덱스: 공식 PyPI\n- 패키지 경로: `src/{package_name}`\n{sqlite_notes}{grpc_notes}\n## 개발\n- 개발 의존성 설치: `uv sync --group dev`\n- 린트: `uv run ruff check .`\n- 테스트: `uv run pytest`\n",
         name = spec.project_name,
         description = readme_description(spec.template),
         run_command = run_command,
         extra_notes = extra_notes,
-        index_url = spec.index_url,
         package_name = spec.package_name,
         sqlite_notes = sqlite_notes,
         grpc_notes = grpc_notes,
@@ -246,7 +240,12 @@ jobs:
         uses: astral-sh/setup-uv@v3
 
       - name: Install dependencies
-        run: uv sync --group dev
+        run: |
+          if [ -f uv.lock ]; then
+            uv sync --locked --group dev
+          else
+            uv sync --group dev
+          fi
 
       - name: Lint
         run: uv run ruff check .
@@ -302,8 +301,8 @@ fn project_description(template: TemplateKind) -> &'static str {
 
 fn readme_description(template: TemplateKind) -> &'static str {
     match template {
-        TemplateKind::Cli => "wpycli, wconfig, wlogger 조합으로 시작하는 CLI 프로젝트입니다.",
-        TemplateKind::Gui => "wconfig, wlogger, PySide6 조합으로 시작하는 GUI 프로젝트입니다.",
-        TemplateKind::Server => "wconfig, wlogger, FastAPI 조합으로 시작하는 서버 프로젝트입니다.",
+        TemplateKind::Cli => "wpycli, wpyconf, wpylog 조합으로 시작하는 CLI 프로젝트입니다.",
+        TemplateKind::Gui => "wpyconf, wpylog, PySide6 조합으로 시작하는 GUI 프로젝트입니다.",
+        TemplateKind::Server => "wpyconf, wpylog, FastAPI 조합으로 시작하는 서버 프로젝트입니다.",
     }
 }

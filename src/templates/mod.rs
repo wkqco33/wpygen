@@ -113,18 +113,18 @@ mod tests {
             template,
             grpc,
             sqlite: false,
-            index_url: "https://pypi.wkqcosoft.cloud".to_string(),
         }
     }
 
     #[test]
-    fn cli_pyproject_uses_private_packages() {
+    fn cli_pyproject_uses_official_pypi_packages() {
         let rendered = common::build_pyproject(&spec(TemplateKind::Cli, false));
-        assert!(rendered.contains("\"wconfig\""));
-        assert!(rendered.contains("\"wlogger\""));
+        assert!(rendered.contains("\"wpyconf\""));
+        assert!(rendered.contains("\"wpylog\""));
         assert!(rendered.contains("\"wpycli\""));
-        assert!(rendered.contains("[[tool.uv.index]]"));
-        assert!(rendered.contains("url = \"https://pypi.wkqcosoft.cloud\""));
+        assert!(!rendered.contains("[[tool.uv.index]]"));
+        assert!(!rendered.contains("\"wconfig\""));
+        assert!(!rendered.contains("\"wlogger\""));
     }
 
     #[test]
@@ -178,6 +178,14 @@ mod tests {
                 .iter()
                 .any(|file| file.relative_path == Path::new("src/demo_app/database.py"))
         );
+    }
+
+    #[test]
+    fn grpc_codegen_rewrites_generated_import_to_relative() {
+        let script = grpc::build_codegen_script(&spec(TemplateKind::Server, true));
+        assert!(script.contains("PB2_GRPC_FILE"));
+        assert!(script.contains("from . import demo_app_pb2 as "));
+        assert!(script.contains("generated.replace(absolute_import, relative_import, 1)"));
     }
 
     #[test]

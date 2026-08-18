@@ -4,8 +4,6 @@ use clap::{Args, Parser, Subcommand};
 
 use crate::models::TemplateKind;
 
-const DEFAULT_INDEX_URL: &str = "https://pypi.wkqcosoft.cloud";
-
 #[derive(Debug, Parser)]
 #[command(
     name = "wpygen",
@@ -63,7 +61,7 @@ pub struct NewArgs {
     pub verbose: bool,
 
     /// 실제로 파일을 쓰지 않고, 생성될 파일 목록만 출력한다.
-    #[arg(long, conflicts_with_all = ["git", "sync"])]
+    #[arg(long, conflicts_with_all = ["git", "sync", "lock"])]
     pub dry_run: bool,
 
     /// 생성 후 `git init` 및 최초 커밋을 실행한다.
@@ -74,7 +72,7 @@ pub struct NewArgs {
     #[arg(long)]
     pub sync: bool,
 
-    /// 사설 패키지 인덱스 URL
-    #[arg(long, default_value = DEFAULT_INDEX_URL)]
-    pub index_url: String,
+    /// 생성 후 `uv lock` 을 실행한다.
+    #[arg(long)]
+    pub lock: bool,
 }

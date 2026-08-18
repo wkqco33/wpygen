@@ -3,28 +3,22 @@
 Rust로 만든 Python 프로젝트 템플릿 생성기입니다.  
 `CLI`, `GUI`, `SERVER` 템플릿을 만들 수 있고, 옵션으로 `gRPC`, `SQLite` 구성을 함께 넣을 수 있습니다.
 
-생성되는 프로젝트는 `uv` 기준으로 구성되며, 내부 패키지 인덱스 `https://pypi.wkqcosoft.cloud` 를 사용합니다.
+생성되는 프로젝트는 `uv` 기준으로 구성되며, 공식 PyPI에서 패키지를 설치합니다.
 
 ## 지원 템플릿
 
 | 템플릿 | 기본 구성 | 선택 옵션 |
 | --- | --- | --- |
-| `cli` | `wpycli`, `wconfig`, `wlogger` | `gRPC`, `SQLite` |
-| `gui` | `PySide6`, `wconfig`, `wlogger` | `gRPC`, `SQLite` |
-| `server` | `FastAPI`, `uvicorn`, `wconfig`, `wlogger` | `gRPC`, `SQLite` |
+| `cli` | `wpycli`, `wpyconf`, `wpylog` | `gRPC`, `SQLite` |
+| `gui` | `PySide6`, `wpyconf`, `wpylog` | `gRPC`, `SQLite` |
+| `server` | `FastAPI`, `uvicorn`, `wpyconf`, `wpylog` | `gRPC`, `SQLite` |
 
 ## 생성되는 기본 설정
 
 - Python 버전: `>=3.12`
 - 패키지 관리: `uv`
 - 빌드 백엔드: `hatchling`
-- 내부 인덱스:
-
-```toml
-[[tool.uv.index]]
-name = "wkqcosoft"
-url = "https://pypi.wkqcosoft.cloud"
-```
+- 패키지 인덱스: 공식 PyPI
 
 ## ppm 배포 설정
 
@@ -98,10 +92,10 @@ wpygen new [OPTIONS] --template <cli|gui|server> <NAME>
 | `--package-name` | Python 패키지명 직접 지정 |
 | `--force` | 대상 디렉터리가 비어있지 않아도 생성 |
 | `-v, --verbose` | 생성 진행 상황을 상세히 출력 |
-| `--dry-run` | 실제로 쓰지 않고 생성될 파일 목록만 출력 (`--git`/`--sync`와 동시 사용 불가) |
+| `--dry-run` | 실제로 쓰지 않고 생성될 파일 목록만 출력 (`--git`/`--sync`/`--lock`과 동시 사용 불가) |
 | `--git` | 생성 후 `git init` + 최초 커밋 실행 |
 | `--sync` | 생성 후 `uv sync` 실행 |
-| `--index-url` | 사설 패키지 인덱스 URL 변경 |
+| `--lock` | 생성 후 `uv lock` 실행 (`--sync`와 함께 사용하면 lock 후 sync) |
 
 ## 쉘 자동완성
 
@@ -166,7 +160,7 @@ test_cli/
 ### CLI
 
 - `wpycli` 기반 명령 구조
-- `wconfig` + `wlogger` 런타임 설정
+- `wpyconf` + `wpylog` 런타임 설정 (`wconfig` + `wlogger`로 import)
 - `--sqlite` 사용 시 `db-init` 명령 포함
 
 ### GUI
@@ -232,7 +226,7 @@ cargo fmt
 
 ## 참고
 
-- 기본 내부 인덱스 URL은 `https://pypi.wkqcosoft.cloud`
-- 템플릿 생성 후 `uv sync` 시점에 사설 서버의 최신 패키지 버전을 자동으로 가져옵니다.
+- `wpycli`, `wpyconf`, `wpylog`는 공식 PyPI에서 설치됩니다.
+- 재현 가능한 의존성 설치가 필요하면 생성 시 `--lock`을 사용하고 `uv.lock`을 커밋합니다.
 - 생성된 프로젝트 안에서도 `uv sync` 기준으로 바로 사용할 수 있게 구성됨
 - `ppm`용 릴리스 아티팩트는 GitHub Actions `release` 워크플로우에서 생성됨
