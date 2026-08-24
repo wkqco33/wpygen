@@ -1,0 +1,5 @@
+# Normalize line endings for text files
+* text=auto
+
+# Lock files are generated; treat as text for review
+Cargo.lock text

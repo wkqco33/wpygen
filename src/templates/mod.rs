@@ -94,6 +94,59 @@ pub fn render_project(spec: &ProjectSpec) -> Vec<GeneratedFile> {
     files
 }
 
+/// `render_project`가 만드는 파일의 상대 경로만 돌려준다. 내용을 렌더링하지 않으므로
+/// `--dry-run`처럼 경로만 필요한 경우에 쓴다. `render_project`와 목록이 어긋나지
+/// 않도록 `project_file_paths_matches_render_project` 테스트로 동기화를 보장한다.
+pub fn project_file_paths(spec: &ProjectSpec) -> Vec<PathBuf> {
+    let mut paths = vec![
+        PathBuf::from("pyproject.toml"),
+        PathBuf::from("README.md"),
+        PathBuf::from(".gitignore"),
+        PathBuf::from(".python-version"),
+        PathBuf::from(".env.example"),
+        PathBuf::from(".env"),
+        PathBuf::from("config.toml"),
+        PathBuf::from(format!("src/{}/__init__.py", spec.package_name)),
+    ];
+
+    match spec.template {
+        TemplateKind::Cli => {
+            paths.push(PathBuf::from(format!("src/{}/main.py", spec.package_name)));
+        }
+        TemplateKind::Gui | TemplateKind::Server => {
+            paths.push(PathBuf::from(format!(
+                "src/{}/settings.py",
+                spec.package_name
+            )));
+            paths.push(PathBuf::from(format!(
+                "src/{}/logging.py",
+                spec.package_name
+            )));
+            paths.push(PathBuf::from(format!("src/{}/main.py", spec.package_name)));
+        }
+    }
+    paths.push(PathBuf::from("tests/test_smoke.py"));
+    paths.push(PathBuf::from(".github/workflows/ci.yml"));
+
+    if spec.sqlite {
+        paths.push(PathBuf::from(format!(
+            "src/{}/database.py",
+            spec.package_name
+        )));
+    }
+
+    if spec.grpc {
+        paths.push(PathBuf::from(format!("proto/{}.proto", spec.package_name)));
+        paths.push(PathBuf::from(format!(
+            "src/{}/grpc/__init__.py",
+            spec.package_name
+        )));
+        paths.push(PathBuf::from("tools/generate_grpc.py"));
+    }
+
+    paths
+}
+
 fn file(path: impl Into<PathBuf>, contents: String) -> GeneratedFile {
     GeneratedFile {
         relative_path: path.into(),
@@ -178,6 +231,23 @@ mod tests {
                 .iter()
                 .any(|file| file.relative_path == Path::new("src/demo_app/database.py"))
         );
+    }
+
+    #[test]
+    fn project_file_paths_matches_render_project() {
+        for template in [TemplateKind::Cli, TemplateKind::Gui, TemplateKind::Server] {
+            for grpc in [false, true] {
+                for sqlite in [false, true] {
+                    let mut project = spec(template, grpc);
+                    project.sqlite = sqlite;
+                    let rendered: Vec<PathBuf> = render_project(&project)
+                        .into_iter()
+                        .map(|file| file.relative_path)
+                        .collect();
+                    assert_eq!(project_file_paths(&project), rendered);
+                }
+            }
+        }
     }
 
     #[test]

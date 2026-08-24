@@ -2,7 +2,9 @@
 name = "wpygen"
 version = "0.1.0"
 edition = "2024"
+license = "MIT"
+description = "uv 기반 Python 프로젝트 템플릿(CLI/GUI/SERVER) 생성기"
+repository = "https://github.com/wkqco33/wpygen"
 
 [dependencies]
-clap = { version = "4.5.38", features = ["derive"] }
-clap_complete = "4.5"
+wrcli = "0.1"

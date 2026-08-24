@@ -34,16 +34,18 @@ Rust로 만든 Python 프로젝트 템플릿 생성기입니다.
 {
   "description": "uv 기반 Python 프로젝트 템플릿 생성기",
   "author": "wkqco",
+  "homepage": "https://github.com/wkqco33/wpygen",
   "bin_name": "wpygen"
 }
 ```
 
-릴리스 워크플로우는 태그 푸시 시 아래 형식의 아티팩트를 올리도록 구성했습니다.
+릴리스 워크플로우는 태그 푸시 시 아래 형식의 아티팩트와 각각의 SHA-256 체크섬을
+올리도록 구성했습니다.
 
-- `wpygen_linux_amd64.tar.gz`
-- `wpygen_darwin_amd64.tar.gz`
-- `wpygen_darwin_arm64.tar.gz`
-- `wpygen_windows_amd64.zip`
+- `wpygen_linux_amd64.tar.gz` (+ `.sha256`)
+- `wpygen_darwin_amd64.tar.gz` (+ `.sha256`)
+- `wpygen_darwin_arm64.tar.gz` (+ `.sha256`)
+- `wpygen_windows_amd64.zip` (+ `.sha256`)
 
 태그 예시:
 
@@ -212,6 +214,9 @@ src/
 
 ## 개발
 
+에이전트/개발자를 위한 개발 방식(TDD, 코드 구조, 코딩 규칙)은
+[`AGENTS.md`](AGENTS.md)를 참고하세요.
+
 ### 테스트
 
 ```bash
@@ -223,6 +228,16 @@ cargo test
 ```bash
 cargo fmt
 ```
+
+## 기여
+
+버그 리포트, 기능 제안, 기여 방법은 [`CONTRIBUTING.md`](CONTRIBUTING.md)를
+참고하세요. 보안 취약점은 [`SECURITY.md`](SECURITY.md)의 절차를 따르세요.
+
+## 라이선스
+
+이 프로젝트는 MIT 라이선스로 배포됩니다. 자세한 내용은
+[`LICENSE`](LICENSE)를 참고하세요.
 
 ## 참고
 

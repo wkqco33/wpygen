@@ -6,6 +6,8 @@ use std::path::PathBuf;
 pub enum Error {
     InvalidPackageName(String),
     InvalidProjectName(String),
+    InvalidTemplate(String),
+    ConflictingFlags,
     TargetPathIsFile(PathBuf),
     TargetDirectoryNotEmpty(PathBuf),
     Io {
@@ -30,6 +32,8 @@ impl Error {
         match self {
             Self::InvalidPackageName(_)
             | Self::InvalidProjectName(_)
+            | Self::InvalidTemplate(_)
+            | Self::ConflictingFlags
             | Self::TargetPathIsFile(_)
             | Self::TargetDirectoryNotEmpty(_) => 2,
             Self::Io { .. } | Self::RestoreFailed { .. } | Self::CommandFailed { .. } => 1,
@@ -49,6 +53,14 @@ impl fmt::Display for Error {
                 "유효하지 않은 프로젝트 이름입니다: {name:?} (영문자/숫자와 '-', '_', '.'만 허용하며, \
                  첫 글자와 마지막 글자는 영문자/숫자여야 합니다. pyproject.toml의 배포 패키지명으로도 \
                  그대로 쓰이기 때문입니다)"
+            ),
+            Self::InvalidTemplate(name) => write!(
+                f,
+                "유효하지 않은 템플릿 종류입니다: {name:?} (허용: cli, gui, server)"
+            ),
+            Self::ConflictingFlags => write!(
+                f,
+                "--dry-run 은 --git / --sync / --lock 와 함께 사용할 수 없습니다."
             ),
             Self::TargetPathIsFile(path) => {
                 write!(

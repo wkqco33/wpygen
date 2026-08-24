@@ -37,15 +37,11 @@ pub fn create_project(
     Ok(files.len())
 }
 
-/// 실제로 쓰지 않고, 생성될 파일의 상대 경로 목록만 돌려준다. 대상 디렉터리 검증은
-/// `create_project`와 동일하게 수행하므로 `--force` 없이 비어있지 않은 디렉터리를
-/// 대상으로 하면 여기서도 동일하게 실패한다.
+/// 실제로 쓰지 않고 생성될 파일의 상대 경로 목록만 돌려준다. 대상 디렉터리 검증은
+/// `create_project`와 동일하게 수행한다.
 pub fn preview(target_dir: &Path, spec: &ProjectSpec, force: bool) -> Result<Vec<PathBuf>, Error> {
     validate_target_dir(target_dir, force)?;
-    Ok(templates::render_project(spec)
-        .into_iter()
-        .map(|file| file.relative_path)
-        .collect())
+    Ok(templates::project_file_paths(spec))
 }
 
 /// 대상 경로가 파일이 아니고, 비어있거나 `force`가 지정됐는지 확인한다.
@@ -68,9 +64,9 @@ fn validate_target_dir(target_dir: &Path, force: bool) -> Result<(), Error> {
     Ok(())
 }
 
-/// `target_dir`와 같은 부모 디렉터리 아래에 임시 스테이징 디렉터리를 만든다.
-/// 같은 부모 아래 두는 이유는 이후 `fs::rename`으로 같은 파일시스템 내에서
-/// 원자적으로 옮기기 위함이다.
+/// `target_dir`와 같은 부모 아래에 임시 스테이징 디렉터리를 만든다. 같은 부모를
+/// 쓰는 이유는 이후 `fs::rename`이 같은 파일시스템 내에서 원자적으로 동작하기
+/// 위함이다.
 fn create_staging_dir(target_dir: &Path) -> Result<PathBuf, Error> {
     let parent = match target_dir.parent() {
         Some(parent) if !parent.as_os_str().is_empty() => parent,

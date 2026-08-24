@@ -77,8 +77,16 @@ jobs:
           Copy-Item "target/${{ matrix.target }}/release/wpygen${{ matrix.bin_ext }}" "dist/wpygen.exe"
           Compress-Archive -Path "dist/wpygen.exe" -DestinationPath "$assetName.zip" -Force
 
+      - name: Generate SHA-256 checksum
+        shell: bash
+        run: |
+          set -euo pipefail
+          asset_name="wpygen_${{ matrix.os }}_${{ matrix.arch }}.${{ matrix.archive }}"
+          sha256sum "$asset_name" > "$asset_name.sha256"
+
       - name: Upload release asset
         uses: softprops/action-gh-release@v2
         with:
           files: |
             wpygen_${{ matrix.os }}_${{ matrix.arch }}.${{ matrix.archive }}
+            wpygen_${{ matrix.os }}_${{ matrix.arch }}.${{ matrix.archive }}.sha256

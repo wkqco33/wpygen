@@ -1,6 +1,6 @@
-use clap::ValueEnum;
+use crate::error::Error;
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, ValueEnum)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum TemplateKind {
     Cli,
     Gui,
@@ -13,6 +13,15 @@ impl TemplateKind {
             Self::Cli => "cli",
             Self::Gui => "gui",
             Self::Server => "server",
+        }
+    }
+
+    pub fn from_str(s: &str) -> Result<Self, Error> {
+        match s {
+            "cli" => Ok(Self::Cli),
+            "gui" => Ok(Self::Gui),
+            "server" => Ok(Self::Server),
+            other => Err(Error::InvalidTemplate(other.to_string())),
         }
     }
 }
