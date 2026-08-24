@@ -41,7 +41,7 @@ jobs:
         run: cargo test --locked
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v3
+        uses: astral-sh/setup-uv@v7
 
       - name: Validate generated projects
         run: cargo test --test generated_projects -- --ignored
