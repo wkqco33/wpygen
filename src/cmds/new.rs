@@ -1,9 +1,12 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use crate::cli::NewArgs;
 use crate::error::Error;
 use crate::models::ProjectSpec;
 use crate::report::NewReport;
+use wrcli::OutputFormat;
+use wrcli::style::pager;
+
 use crate::services::process::{self, ChildOutput};
 use crate::services::writer;
 use crate::templates;
@@ -19,7 +22,7 @@ pub fn run(args: NewArgs) -> Result<(), Error> {
         force,
         verbose,
         dry_run,
-        json,
+        format,
         quiet,
         git,
         sync,
@@ -38,17 +41,24 @@ pub fn run(args: NewArgs) -> Result<(), Error> {
     };
     let target_dir = output.join(&name);
     let policy = CommandPolicy {
-        child_output: if json {
-            ChildOutput::RedirectStdoutToStderr
-        } else {
+        child_output: if format == OutputFormat::Human {
             ChildOutput::Inherit
+        } else {
+            // 기계 판독 출력(--json/--plain)에서는 자식 프로세스 stdout도 stderr로 돌린다.
+            ChildOutput::RedirectStdoutToStderr
         },
         quiet,
     };
 
     if dry_run {
         let files = writer::preview(&target_dir, &spec, force)?;
-        print_report(&spec, &target_dir, &files, true, json);
+        let report = NewReport {
+            spec: &spec,
+            target_dir: &target_dir,
+            files: &files,
+            dry_run: true,
+        };
+        print_report(&report, format, quiet);
         return Ok(());
     }
 
@@ -69,7 +79,13 @@ pub fn run(args: NewArgs) -> Result<(), Error> {
         uv_lock(&target_dir, policy)?;
     }
 
-    print_report(&spec, &target_dir, &files, false, json);
+    let report = NewReport {
+        spec: &spec,
+        target_dir: &target_dir,
+        files: &files,
+        dry_run: false,
+    };
+    print_report(&report, format, quiet);
     Ok(())
 }
 
@@ -82,28 +98,26 @@ struct CommandPolicy {
     quiet: bool,
 }
 
-/// 결과 요약은 stdout으로, 진행·상태 메시지는 stderr로 보낸다.
-fn print_report(
-    spec: &ProjectSpec,
-    target_dir: &Path,
-    files: &[PathBuf],
-    dry_run: bool,
-    json: bool,
-) {
-    let report = NewReport {
-        spec,
-        target_dir,
-        files,
-        dry_run,
-    };
-    println!(
-        "{}",
-        if json {
-            report.to_json()
-        } else {
-            report.to_text()
+/// 결과는 stdout으로, 진행·상태 메시지는 stderr로 보낸다. 사람이 읽는 모드에서
+/// 긴 dry-run 목록은 TTY일 때만 pager로 넘긴다(비TTY에서는 그대로 출력).
+fn print_report(report: &NewReport, format: OutputFormat, quiet: bool) {
+    match format {
+        OutputFormat::Json => println!("{}", report.to_json()),
+        OutputFormat::Plain => {
+            let text = report.to_plain();
+            if !text.is_empty() {
+                println!("{text}");
+            }
         }
-    );
+        OutputFormat::Human => {
+            let text = report.to_text();
+            if report.dry_run && !quiet {
+                let _ = pager::page(&format!("{text}\n"));
+            } else {
+                println!("{text}");
+            }
+        }
+    }
 }
 
 /// 결과가 아닌 진행·상태 알림. `--quiet`면 출력하지 않는다.
@@ -216,7 +230,7 @@ mod tests {
             force: false,
             verbose: false,
             dry_run: false,
-            json: false,
+            format: OutputFormat::Human,
             quiet: false,
             git: false,
             sync: false,

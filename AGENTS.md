@@ -9,7 +9,7 @@
 템플릿을 만들고 옵션으로 `gRPC`/`SQLite` 구성을 추가할 수 있습니다. 생성되는
 프로젝트는 `uv` 기준이며 공식 PyPI에서 패키지를 설치합니다.
 
-- CLI 프레임워크: `wrcli` (clap 대체)
+- CLI 프레임워크: `wrcli` (clap 대체, `Cargo.toml`의 `wrcli = "0.5"`. 갱신은 dependabot PR로)
 - Rust edition: 2024
 - 최소 Python 버전(생성 대상): 3.12
 
@@ -64,8 +64,12 @@ cargo test -- --ignored    # uv/PyPI가 필요한 통합 테스트
 - **출력 스트림**: 결과(생성 요약, dry-run 목록, `--json` JSON)는 stdout, 진행·상태·
   오류는 stderr로 보낸다. `--json` 모드에서는 자식 프로세스 stdout도 stderr로
   돌려 stdout을 JSON 전용으로 유지한다.
-- **CLI 계약**: 플래그, 종료 코드, `--json` 스키마를 바꾸면
+- **CLI 계약**: 플래그, 종료 코드, `--json`/`--plain` 출력을 바꾸면
   `tests/cli_contract.rs`와 `CHANGELOG.md`를 함께 갱신한다.
+- **전역 플래그**: clig.dev 표준 플래그는 루트의 `with_standard_flags`에서
+  persistent로 등록한다(라이브러리 `standard_flags()` 번들은 설명이 영어라 미사용).
+  파서 오류 종료 코드는 `WrCliError::exit_code()`를 그대로 따르고, 앱 고유 오류만
+  `Error::exit_code()`로 판정한다.
 - **문자열 템플릿**: 생성되는 Python 코드는 `format!`의 `{{ }}` 이스케이프에
   주의한다. Python 불리언은 `True`/`False`(소문자 아님)여야 한다.
 

@@ -102,8 +102,10 @@ gh attestation verify wpygen_darwin_arm64.tar.gz --repo wkqco33/wpygen
   구간에서는 MINOR)에서 제거하고 `CHANGELOG.md`의 `Deprecated`/`Removed`에 기록합니다.
 - `--json` 스키마는 키 추가만 허용합니다. 키 제거·이름 변경·타입 변경은 위 절차를
   따릅니다.
+- `--plain`은 파일 경로를 한 줄에 하나씩 출력하는 계약이며, `--json`과 배타입니다.
 - 종료 코드(0/1/2)는 계약이므로 바꾸지 않습니다. 새 오류가 생기면 기존 규칙(입력 오류
-  2, 환경 오류 1)에 맞춰 분류합니다.
+  2, 환경 오류 1)에 맞춰 분류합니다. 파서 오류는 wrcli의 분류를 따르므로 새 검증
+  오류도 자동으로 2가 됩니다.
 
 ## ppm 설정
 

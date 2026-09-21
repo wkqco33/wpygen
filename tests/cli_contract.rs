@@ -170,6 +170,10 @@ fn user_input_errors_exit_with_code_2() {
     let unknown_flag = run_wpygen(&["new", "-t", "cli", "--nope", "demo_bad"]);
     assert_eq!(unknown_flag.status.code(), Some(2));
 
+    let conflicting_output_flags =
+        run_wpygen(&["new", "-t", "cli", "--dry-run", "--git", "demo_bad"]);
+    assert_eq!(conflicting_output_flags.status.code(), Some(2));
+
     fs::remove_dir_all(root).expect("failed to clean up");
 }
 
@@ -203,14 +207,91 @@ fn subcommand_help_documents_usage_examples_and_links() {
 
     assert!(output.status.success(), "{}", stderr(&output));
     let out = stdout(&output);
+    assert!(out.contains("Examples:"), "{out}");
+    assert!(out.contains("wpygen new -t cli my_app"), "{out}");
+    assert!(out.contains("<NAME>"), "{out}");
+    assert!(out.contains("Documentation:"), "{out}");
     assert!(
-        out.contains("wpygen new --template <cli|gui|server> [flags] <NAME>"),
+        out.contains("https://github.com/wkqco33/wpygen#readme"),
         "{out}"
     );
-    assert!(out.contains("wpygen new -t cli my_app"), "{out}");
+    assert!(out.contains("Support:"), "{out}");
     assert!(
         out.contains("https://github.com/wkqco33/wpygen/issues"),
         "{out}"
+    );
+}
+
+#[test]
+fn builtin_help_subcommand_prints_subcommand_help() {
+    let output = run_wpygen(&["help", "new"]);
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    let out = stdout(&output);
+    assert!(out.contains("wpygen new [flags]"), "{out}");
+    assert!(out.contains("-t, --template"), "{out}");
+}
+
+#[test]
+fn plain_output_lists_file_paths_one_per_line() {
+    let root = unique_temp_dir();
+    fs::create_dir_all(&root).expect("failed to create temp dir");
+    let root_arg = root.to_str().expect("temp path is not utf-8");
+
+    let output = run_wpygen(&[
+        "new",
+        "-t",
+        "cli",
+        "-n",
+        "--plain",
+        "-o",
+        root_arg,
+        "demo_plain",
+    ]);
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    let out = stdout(&output);
+    let lines: Vec<&str> = out.lines().collect();
+    assert!(!lines.is_empty(), "{out}");
+    assert!(
+        lines
+            .iter()
+            .all(|line| line.starts_with(root_arg) && !line.contains(' ')),
+        "파일 경로만 한 줄씩 나와야 한다: {out}"
+    );
+    assert!(out.contains("pyproject.toml"), "{out}");
+    assert!(!out.contains("dry-run:"), "{out}");
+
+    fs::remove_dir_all(root).expect("failed to clean up");
+}
+
+#[test]
+fn plain_and_json_are_mutually_exclusive() {
+    let output = run_wpygen(&["new", "-t", "cli", "--plain", "--json", "demo_conflict"]);
+
+    assert_eq!(output.status.code(), Some(2), "{}", stderr(&output));
+}
+
+#[test]
+fn color_flags_control_ansi_output() {
+    let forced = run_wpygen(&["--color", "always", "--version"]);
+    assert!(forced.status.success(), "{}", stderr(&forced));
+    assert!(
+        stdout(&forced).contains('\u{1b}'),
+        "--color always 인데 ANSI 코드가 없다"
+    );
+
+    let disabled = run_wpygen(&["--no-color", "--version"]);
+    assert!(disabled.status.success(), "{}", stderr(&disabled));
+    assert!(
+        !stdout(&disabled).contains('\u{1b}'),
+        "--no-color 인데 ANSI 코드가 있다"
+    );
+
+    let default = run_wpygen(&["--version"]);
+    assert!(
+        !stdout(&default).contains('\u{1b}'),
+        "파이프 출력은 무색이어야 한다"
     );
 }
 

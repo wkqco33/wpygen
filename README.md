@@ -148,32 +148,48 @@ wpygen new [OPTIONS] --template <cli|gui|server> <NAME>
 | `--sqlite` | SQLite 세팅 추가 |
 | `-o, --output` | 생성할 상위 디렉터리 |
 | `--package-name` | Python 패키지명 직접 지정 |
-| `--force` | 대상 디렉터리가 비어있지 않아도 생성 |
 | `-v, --verbose` | 생성 진행 상황을 상세히 출력 (stderr) |
-| `-n, --dry-run` | 실제로 쓰지 않고 생성될 파일 목록만 출력 (`--git`/`--sync`/`--lock`과 동시 사용 불가) |
-| `--json` | 결과를 기계 판독용 JSON으로 stdout에 출력 |
-| `-q, --quiet` | wpygen의 진행·상태 메시지를 출력하지 않음 (자식 명령 출력은 그대로 전달) |
+| `-n, --dry-run` | 실제로 쓰지 않고 생성될 파일 경로만 출력 (`--git`/`--sync`/`--lock`과 동시 사용 불가) |
 | `--git` | 생성 후 `git init` + 최초 커밋 실행 |
 | `--sync` | 생성 후 `uv sync` 실행 |
 | `--lock` | 생성 후 `uv lock` 실행 (`--sync`와 함께 사용하면 lock 후 sync) |
 
+### 전역 플래그
+
+모든 서브커맨드에서 사용할 수 있습니다(clig.dev 표준 묶음).
+
+| 옵션 | 설명 |
+| --- | --- |
+| `-q, --quiet` | wpygen의 진행·상태 메시지를 출력하지 않음 (자식 명령 출력은 그대로 전달) |
+| `-f, --force` | 대상 디렉터리가 비어있지 않아도 덮어씀 |
+| `--json` | 결과를 JSON으로 stdout에 출력 (기계 판독) |
+| `--plain` | 파일 경로를 한 줄에 하나씩 stdout에 출력 (기계 판독, `--json`과 배타) |
+| `--no-color` | 색상 출력을 끔 |
+| `--color <auto\|always\|never>` | 색상 사용 시점 (기본값 `auto`) |
+| `--no-input` | 프롬프트를 쓰지 않음 (wpygen은 항상 비대화형이라 동작 변화는 없음) |
+
 ## 출력과 종료 코드
 
-- **stdout**: 결과. 생성 요약, `--dry-run` 파일 목록, `--json` JSON 객체.
+- **stdout**: 결과. 생성 요약, `--dry-run` 파일 목록, `--plain` 경로 목록,
+  `--json` JSON 객체.
 - **stderr**: 진행·상태 알림(`-v` 상세 로그, `git`/`uv` 완료), 오류 메시지.
-- `--json`은 stdout에 JSON 객체 하나만 출력합니다. 자식 프로세스(`git`, `uv`)의
-  stdout도 stderr로 돌려 결과를 오염시키지 않습니다.
-- 색상과 박스 장식은 stdout/stderr가 터미널이 아니거나 `NO_COLOR`가 설정되면
-  자동으로 꺼집니다(`TERM=dumb` 포함).
+- `--json`/`--plain`은 stdout을 기계 판독 출력 전용으로 씁니다. 자식 프로세스
+  (`git`, `uv`)의 stdout도 stderr로 돌려 결과를 오염시키지 않습니다.
+- `--plain`은 생성/생성 예정 파일의 경로를 한 줄에 하나씩 출력합니다(스크립트용).
+- 사람이 읽는 긴 dry-run 목록은 stdout이 터미널일 때만 pager(`PAGER`, 기본
+  `less -FIRX`)로 넘깁니다. 파이프/CI에서는 그대로 출력되고, `--quiet`면 pager를
+  쓰지 않습니다.
+- 색상은 `auto`일 때 stdout/stderr가 터미널이고 `NO_COLOR`·`TERM=dumb`이 아닐 때만
+  켜집니다. `--color=always`로 강제하고 `--no-color`/`--color=never`로 끌 수 있습니다.
 
 | 종료 코드 | 의미 |
 | --- | --- |
 | `0` | 성공 |
 | `1` | 환경·시스템 오류 (파일 I/O 실패, 외부 명령 실행 실패 등) |
-| `2` | 입력 오류 (잘못된 이름/템플릿, 충돌하는 플래그, 대상 디렉터리 상태, 미인식 플래그) |
+| `2` | 입력 오류 (잘못된 이름/템플릿, 충돌하는 플래그, 대상 디렉터리 상태, `--plain`+`--json` 동시 사용, 미인식 플래그) |
 
-`--json` 출력 스키마(키 순서 포함)는 계약으로 취급하며 `CHANGELOG.md`에 변경을
-기록합니다.
+`--json`/`--plain` 출력 계약과 종료 코드는 `CHANGELOG.md`에 변경을 기록하며,
+플래그 변경은 additive하게 유지합니다.
 
 ## 쉘 자동완성
 
@@ -202,6 +218,12 @@ cargo run -- new -t cli --sqlite test_cli
 
 ```bash
 wpygen new -t server --grpc --sqlite --dry-run --json my_service | jq '.files[]'
+```
+
+### 생성될 파일 경로를 줄 단위로 받기
+
+```bash
+wpygen new -t cli --dry-run --plain -o ./examples my_app
 ```
 
 ### 자동화에서 조용히 생성하기

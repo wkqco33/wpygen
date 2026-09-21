@@ -47,6 +47,16 @@ impl NewReport<'_> {
         )
     }
 
+    /// 기계 판독용 한 줄 출력. 생성될/생성된 파일의 경로를 계획 순서대로 한 줄씩
+    /// 출력한다(`grep`/`xargs`용). 파일이 없으면 빈 문자열이다.
+    pub fn to_plain(&self) -> String {
+        self.files
+            .iter()
+            .map(|path| self.target_dir.join(path).display().to_string())
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
     /// 사람이 읽는 출력. `--dry-run`이면 파일 목록까지 보여준다.
     pub fn to_text(&self) -> String {
         if self.dry_run {
@@ -227,5 +237,36 @@ mod tests {
         assert_eq!(escape("a\tb\nc\rd"), "a\\tb\\nc\\rd");
         assert_eq!(escape("\u{1}"), "\\u0001");
         assert_eq!(escape("한글"), "한글");
+    }
+
+    #[test]
+    fn plain_report_prints_one_path_per_line() {
+        let files = vec![
+            PathBuf::from("pyproject.toml"),
+            PathBuf::from("src/demo_app/main.py"),
+        ];
+        let report = NewReport {
+            spec: &spec(),
+            target_dir: Path::new("/tmp/demo-app"),
+            files: &files,
+            dry_run: true,
+        };
+
+        assert_eq!(
+            report.to_plain(),
+            "/tmp/demo-app/pyproject.toml\n/tmp/demo-app/src/demo_app/main.py"
+        );
+    }
+
+    #[test]
+    fn plain_report_is_empty_without_files() {
+        let report = NewReport {
+            spec: &spec(),
+            target_dir: Path::new("/tmp/demo-app"),
+            files: &[],
+            dry_run: false,
+        };
+
+        assert_eq!(report.to_plain(), "");
     }
 }
