@@ -300,16 +300,16 @@ dependencies = [
 
 [[package]]
 name = "wpygen"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "wrcli",
 ]
 
 [[package]]
 name = "wrcli"
-version = "0.1.0"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4af80cd457eb5e0484a83e9911b1c3b62d06509cbdd54d4d56ea31b8f347e553"
+checksum = "4b7899c6ab3bc7a122e288dc18baad877bd86b5cca5be83166574f620708ef32"
 dependencies = [
  "indexmap",
  "log",
