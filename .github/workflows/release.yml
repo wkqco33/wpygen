@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Compare tag with Cargo.toml version
         run: |
@@ -59,7 +59,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Install musl tools
         if: matrix.target == 'x86_64-unknown-linux-musl'
@@ -91,7 +91,7 @@ jobs:
           Compress-Archive -Path "dist/wpygen.exe" -DestinationPath "wpygen_${{ matrix.os }}_${{ matrix.arch }}.zip" -Force
 
       - name: Upload packaged asset
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: wpygen_${{ matrix.os }}_${{ matrix.arch }}
           path: wpygen_${{ matrix.os }}_${{ matrix.arch }}.${{ matrix.archive }}
@@ -102,9 +102,13 @@ jobs:
     name: publish-release
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
     steps:
       - name: Download packaged assets
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true
@@ -139,6 +143,15 @@ jobs:
             sha256sum "$asset" > "$asset.sha256"
           done
           ls -l
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: |
+            dist/wpygen_linux_amd64.tar.gz
+            dist/wpygen_darwin_amd64.tar.gz
+            dist/wpygen_darwin_arm64.tar.gz
+            dist/wpygen_windows_amd64.zip
 
       - name: Upload release assets
         uses: softprops/action-gh-release@v3

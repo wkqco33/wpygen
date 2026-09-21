@@ -4,13 +4,16 @@ on:
   push:
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   secrets:
     name: secret-scan
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -19,12 +22,12 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  check:
-    name: fmt-clippy-test
+  lint:
+    name: fmt-clippy
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -37,11 +40,43 @@ jobs:
       - name: Run clippy
         run: cargo clippy --all-targets --locked -- -D warnings
 
+  test:
+    name: test-${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      # 릴리스가 빌드하는 플랫폼과 맞춘다 (PACKAGE_GUIDE.md 참고).
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-15-intel
+          - macos-14
+          - windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
       - name: Run tests
         run: cargo test --locked
 
+  generated-projects:
+    name: generated-projects
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
       - name: Install uv
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@v10
+        with:
+          # Rust 저장소라 uv 캐시 대상(pyproject.toml/uv.lock)이 없다.
+          enable-cache: false
 
       - name: Validate generated projects
         run: cargo test --test generated_projects -- --ignored
