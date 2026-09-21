@@ -2,6 +2,7 @@ mod cli;
 mod cmds;
 mod error;
 mod models;
+mod report;
 mod services;
 mod templates;
 #[cfg(test)]

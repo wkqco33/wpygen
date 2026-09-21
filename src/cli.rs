@@ -10,9 +10,20 @@ use crate::models::TemplateKind;
 
 /// `wpygen` CLI 트리를 빌드한다. 각 서브커맨드의 `on_run_e` 콜백에서 파싱된
 /// `CommandContext`를 앱의 실행 로직(`cmds::*`)으로 연결한다.
+///
+/// 출력 규칙: 결과는 stdout, 진행·상태·오류는 stderr. `new --json`은 stdout에
+/// JSON 객체 하나만 출력한다.
 pub fn build_cli() -> Command {
     Command::new("wpygen")
         .short("Python 프로젝트 템플릿(CLI/GUI/SERVER) 생성기")
+        .long(
+            "Python 프로젝트 템플릿(CLI/GUI/SERVER) 생성기\n\n\
+             예시:\n\
+             wpygen new -t cli my_app\n\
+             wpygen completions bash\n\n\
+             문서: https://github.com/wkqco33/wpygen\n\
+             이슈: https://github.com/wkqco33/wpygen/issues",
+        )
         .flag(Flag::new("version", FlagValue::Bool(false), "버전 정보를 출력한다.").short('V'))
         .on_run(|ctx| {
             if ctx.flags.get_bool("version").unwrap_or(false) {
@@ -24,6 +35,18 @@ pub fn build_cli() -> Command {
         .subcommand(
             Command::new("new")
                 .short("새 Python 프로젝트 템플릿을 생성한다.")
+                .long(
+                    // wrcli의 usage 줄은 위치 인자를 보여주지 않으므로, 예시와 함께
+                    // 전체 실행 경로를 긴 설명에 남긴다.
+                    "사용법:\n\
+                     wpygen new --template <cli|gui|server> [flags] <NAME>\n\n\
+                     예시:\n\
+                     wpygen new -t cli my_app\n\
+                     wpygen new -t server --grpc --sqlite my_service\n\
+                     wpygen new -t gui --dry-run my_app\n\n\
+                     문서: https://github.com/wkqco33/wpygen\n\
+                     이슈: https://github.com/wkqco33/wpygen/issues",
+                )
                 .args(exact_args(1))
                 .flag(
                     Flag::new(
@@ -70,11 +93,27 @@ pub fn build_cli() -> Command {
                     )
                     .short('v'),
                 )
+                .flag(
+                    Flag::new(
+                        "dry-run",
+                        FlagValue::Bool(false),
+                        "실제로 파일을 쓰지 않고, 생성될 파일 목록만 출력한다.",
+                    )
+                    .short('n'),
+                )
                 .flag(Flag::new(
-                    "dry-run",
+                    "json",
                     FlagValue::Bool(false),
-                    "실제로 파일을 쓰지 않고, 생성될 파일 목록만 출력한다.",
+                    "결과를 기계 판독용 JSON으로 stdout에 출력한다.",
                 ))
+                .flag(
+                    Flag::new(
+                        "quiet",
+                        FlagValue::Bool(false),
+                        "진행·상태 메시지를 출력하지 않는다 (--verbose 보다 우선).",
+                    )
+                    .short('q'),
+                )
                 .flag(Flag::new(
                     "git",
                     FlagValue::Bool(false),
@@ -120,6 +159,8 @@ pub struct NewArgs {
     pub force: bool,
     pub verbose: bool,
     pub dry_run: bool,
+    pub json: bool,
+    pub quiet: bool,
     pub git: bool,
     pub sync: bool,
     pub lock: bool,
@@ -143,6 +184,8 @@ impl NewArgs {
         let force = ctx.flags.get_bool("force").unwrap_or(false);
         let verbose = ctx.flags.get_bool("verbose").unwrap_or(false);
         let dry_run = ctx.flags.get_bool("dry-run").unwrap_or(false);
+        let json = ctx.flags.get_bool("json").unwrap_or(false);
+        let quiet = ctx.flags.get_bool("quiet").unwrap_or(false);
         let git = ctx.flags.get_bool("git").unwrap_or(false);
         let sync = ctx.flags.get_bool("sync").unwrap_or(false);
         let lock = ctx.flags.get_bool("lock").unwrap_or(false);
@@ -161,6 +204,8 @@ impl NewArgs {
             force,
             verbose,
             dry_run,
+            json,
+            quiet,
             git,
             sync,
             lock,

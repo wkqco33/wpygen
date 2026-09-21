@@ -1,9 +1,12 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::cli::NewArgs;
 use crate::error::Error;
 use crate::models::ProjectSpec;
-use crate::services::{process, writer};
+use crate::report::NewReport;
+use crate::services::process::{self, ChildOutput};
+use crate::services::writer;
+use crate::templates;
 
 pub fn run(args: NewArgs) -> Result<(), Error> {
     let NewArgs {
@@ -16,6 +19,8 @@ pub fn run(args: NewArgs) -> Result<(), Error> {
         force,
         verbose,
         dry_run,
+        json,
+        quiet,
         git,
         sync,
         lock,
@@ -32,76 +37,115 @@ pub fn run(args: NewArgs) -> Result<(), Error> {
         sqlite,
     };
     let target_dir = output.join(&name);
+    let policy = CommandPolicy {
+        child_output: if json {
+            ChildOutput::RedirectStdoutToStderr
+        } else {
+            ChildOutput::Inherit
+        },
+        quiet,
+    };
 
     if dry_run {
-        return print_dry_run(&target_dir, &spec, force);
+        let files = writer::preview(&target_dir, &spec, force)?;
+        print_report(&spec, &target_dir, &files, true, json);
+        return Ok(());
     }
 
-    let file_count = writer::create_project(&target_dir, &spec, force, verbose)?;
-
-    println!(
-        "생성 완료: {} (template={}, grpc={}, sqlite={}, files={})",
-        target_dir.display(),
-        spec.template.as_str(),
-        on_off(spec.grpc),
-        on_off(spec.sqlite),
-        file_count
+    let files = templates::project_file_paths(&spec);
+    let file_count = writer::create_project(&target_dir, &spec, force, verbose && !quiet)?;
+    assert_eq!(
+        file_count,
+        files.len(),
+        "생성한 파일 수와 계획한 파일 수가 다릅니다 (템플릿 목록 불일치)"
     );
 
     if git {
-        init_git_repository(&target_dir)?;
+        init_git_repository(&target_dir, policy)?;
     }
     if sync {
-        uv_sync(&target_dir, lock)?;
+        uv_sync(&target_dir, lock, policy)?;
     } else if lock {
-        uv_lock(&target_dir)?;
+        uv_lock(&target_dir, policy)?;
     }
 
+    print_report(&spec, &target_dir, &files, false, json);
     Ok(())
 }
 
-fn print_dry_run(target_dir: &Path, spec: &ProjectSpec, force: bool) -> Result<(), Error> {
-    let files = writer::preview(target_dir, spec, force)?;
-    println!("dry-run: {} 아래 생성될 파일 목록", target_dir.display());
-    for path in &files {
-        println!("  {}", path.display());
-    }
-    println!("(dry-run 모드이므로 실제 파일은 생성되지 않았습니다)");
-    Ok(())
+/// 외부 명령 실행과 상태 메시지 출력 방침.
+#[derive(Debug, Clone, Copy)]
+struct CommandPolicy {
+    /// 기계 판독 모드에서는 자식 stdout을 stderr로 돌려 stdout을 JSON만 남긴다.
+    child_output: ChildOutput,
+    /// 진행·상태 메시지를 생략한다.
+    quiet: bool,
 }
 
-fn init_git_repository(target_dir: &Path) -> Result<(), Error> {
-    process::run(target_dir, "git", &["init"])?;
-    process::run(target_dir, "git", &["add", "-A"])?;
-    process::run(target_dir, "git", &["commit", "-m", "wpygen init"])?;
-    println!("git 저장소 초기화 및 최초 커밋 완료");
+/// 결과 요약은 stdout으로, 진행·상태 메시지는 stderr로 보낸다.
+fn print_report(
+    spec: &ProjectSpec,
+    target_dir: &Path,
+    files: &[PathBuf],
+    dry_run: bool,
+    json: bool,
+) {
+    let report = NewReport {
+        spec,
+        target_dir,
+        files,
+        dry_run,
+    };
+    println!(
+        "{}",
+        if json {
+            report.to_json()
+        } else {
+            report.to_text()
+        }
+    );
+}
+
+/// 결과가 아닌 진행·상태 알림. `--quiet`면 출력하지 않는다.
+fn status_message(policy: CommandPolicy, message: &str) {
+    if !policy.quiet {
+        eprintln!("{message}");
+    }
+}
+
+fn init_git_repository(target_dir: &Path, policy: CommandPolicy) -> Result<(), Error> {
+    process::run(target_dir, "git", &["init"], policy.child_output)?;
+    process::run(target_dir, "git", &["add", "-A"], policy.child_output)?;
+    process::run(
+        target_dir,
+        "git",
+        &["commit", "-m", "wpygen init"],
+        policy.child_output,
+    )?;
+    status_message(policy, "git 저장소 초기화 및 최초 커밋 완료");
     Ok(())
 }
 
 /// `--sync`와 `--lock`이 함께 지정되면 lockfile을 먼저 확정한 뒤 그 lockfile로만
 /// 동기화한다(`uv sync --locked`).
-fn uv_sync(target_dir: &Path, lock: bool) -> Result<(), Error> {
+fn uv_sync(target_dir: &Path, lock: bool, policy: CommandPolicy) -> Result<(), Error> {
     if lock {
-        process::run(target_dir, "uv", &["lock"])?;
+        process::run(target_dir, "uv", &["lock"], policy.child_output)?;
     }
     let sync_args: &[&str] = if lock {
         &["sync", "--locked"]
     } else {
         &["sync"]
     };
-    process::run(target_dir, "uv", sync_args)?;
-    println!("uv sync 완료");
+    process::run(target_dir, "uv", sync_args, policy.child_output)?;
+    status_message(policy, "uv sync 완료");
     Ok(())
 }
 
-fn uv_lock(target_dir: &Path) -> Result<(), Error> {
-    process::run(target_dir, "uv", &["lock"])?;
-    println!("uv lock 완료");
+fn uv_lock(target_dir: &Path, policy: CommandPolicy) -> Result<(), Error> {
+    process::run(target_dir, "uv", &["lock"], policy.child_output)?;
+    status_message(policy, "uv lock 완료");
     Ok(())
-}
-
-fn on_off(enabled: bool) -> &'static str {
-    if enabled { "on" } else { "off" }
 }
 
 pub fn normalize_package_name(raw: &str) -> Result<String, Error> {
@@ -172,6 +216,8 @@ mod tests {
             force: false,
             verbose: false,
             dry_run: false,
+            json: false,
+            quiet: false,
             git: false,
             sync: false,
             lock: false,
