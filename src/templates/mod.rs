@@ -9,149 +9,123 @@ use std::path::PathBuf;
 
 use crate::models::{GeneratedFile, ProjectSpec, TemplateKind};
 
-pub fn render_project(spec: &ProjectSpec) -> Vec<GeneratedFile> {
-    let mut files = vec![
-        file("pyproject.toml", common::build_pyproject(spec)),
-        file("README.md", common::build_readme(spec)),
-        file(".gitignore", common::build_gitignore(spec)),
-        file(".python-version", "3.12\n".to_string()),
-        file(".env.example", common::build_env_example(spec)),
-        file(".env", common::build_env_example(spec)),
-        file("config.toml", common::build_config_toml(spec)),
-        file(
-            format!("src/{}/__init__.py", spec.package_name),
-            "__all__ = []\n".to_string(),
-        ),
-    ];
-
-    let smoke_test = match spec.template {
-        TemplateKind::Cli => {
-            files.push(file(
-                format!("src/{}/main.py", spec.package_name),
-                cli::build_main(spec),
-            ));
-            cli::build_smoke_test(spec)
-        }
-        TemplateKind::Gui => {
-            files.push(file(
-                format!("src/{}/settings.py", spec.package_name),
-                gui::build_settings(spec),
-            ));
-            files.push(file(
-                format!("src/{}/logging.py", spec.package_name),
-                common::build_shared_logging(spec),
-            ));
-            files.push(file(
-                format!("src/{}/main.py", spec.package_name),
-                gui::build_main(spec),
-            ));
-            gui::build_smoke_test(spec)
-        }
-        TemplateKind::Server => {
-            files.push(file(
-                format!("src/{}/settings.py", spec.package_name),
-                server::build_settings(spec),
-            ));
-            files.push(file(
-                format!("src/{}/logging.py", spec.package_name),
-                common::build_shared_logging(spec),
-            ));
-            files.push(file(
-                format!("src/{}/main.py", spec.package_name),
-                server::build_main(spec),
-            ));
-            server::build_smoke_test(spec)
-        }
-    };
-    files.push(file("tests/test_smoke.py", smoke_test));
-    files.push(file(
-        ".github/workflows/ci.yml",
-        common::build_project_ci_workflow(),
-    ));
-
-    if spec.sqlite {
-        files.push(file(
-            format!("src/{}/database.py", spec.package_name),
-            sqlite::build_database_module(spec),
-        ));
-    }
-
-    if spec.grpc {
-        files.push(file(
-            format!("proto/{}.proto", spec.package_name),
-            grpc::build_proto(spec),
-        ));
-        files.push(file(
-            format!("src/{}/grpc/__init__.py", spec.package_name),
-            "__all__ = []\n".to_string(),
-        ));
-        files.push(file(
-            "tools/generate_grpc.py",
-            grpc::build_codegen_script(spec),
-        ));
-    }
-
-    files
+/// 파일 하나의 상대 경로와, 그 내용을 만드는 함수.
+struct FilePlan {
+    path: PathBuf,
+    render: fn(&ProjectSpec) -> String,
 }
 
-/// `render_project`가 만드는 파일의 상대 경로만 돌려준다. 내용을 렌더링하지 않으므로
-/// `--dry-run`처럼 경로만 필요한 경우에 쓴다. `render_project`와 목록이 어긋나지
-/// 않도록 `project_file_paths_matches_render_project` 테스트로 동기화를 보장한다.
-pub fn project_file_paths(spec: &ProjectSpec) -> Vec<PathBuf> {
-    let mut paths = vec![
-        PathBuf::from("pyproject.toml"),
-        PathBuf::from("README.md"),
-        PathBuf::from(".gitignore"),
-        PathBuf::from(".python-version"),
-        PathBuf::from(".env.example"),
-        PathBuf::from(".env"),
-        PathBuf::from("config.toml"),
-        PathBuf::from(format!("src/{}/__init__.py", spec.package_name)),
+/// 생성할 파일 목록을 순서까지 포함해 한 곳에서만 정의한다. 이 순서가 `--dry-run`
+/// 출력 순서와 실제 쓰기 순서가 되며, `render_project`와 `project_file_paths`가
+/// 서로 어긋날 수 없도록 두 함수 모두 이 목록을 쓴다.
+fn file_plan(spec: &ProjectSpec) -> Vec<FilePlan> {
+    let package_name = &spec.package_name;
+    let mut plans = vec![
+        plan("pyproject.toml", common::build_pyproject),
+        plan("README.md", common::build_readme),
+        plan(".gitignore", common::build_gitignore),
+        plan(".python-version", |_| "3.12\n".to_string()),
+        plan(".env.example", common::build_env_example),
+        plan(".env", common::build_env_example),
+        plan("config.toml", common::build_config_toml),
+        plan(format!("src/{package_name}/__init__.py"), |_| {
+            "__all__ = []\n".to_string()
+        }),
     ];
 
     match spec.template {
         TemplateKind::Cli => {
-            paths.push(PathBuf::from(format!("src/{}/main.py", spec.package_name)));
+            plans.push(plan(format!("src/{package_name}/main.py"), cli::build_main));
+            plans.push(plan("tests/test_smoke.py", cli::build_smoke_test));
         }
-        TemplateKind::Gui | TemplateKind::Server => {
-            paths.push(PathBuf::from(format!(
-                "src/{}/settings.py",
-                spec.package_name
-            )));
-            paths.push(PathBuf::from(format!(
-                "src/{}/logging.py",
-                spec.package_name
-            )));
-            paths.push(PathBuf::from(format!("src/{}/main.py", spec.package_name)));
-        }
+        TemplateKind::Gui => push_settings_based_plans(
+            &mut plans,
+            spec,
+            gui::build_settings,
+            gui::build_main,
+            gui::build_smoke_test,
+        ),
+        TemplateKind::Server => push_settings_based_plans(
+            &mut plans,
+            spec,
+            server::build_settings,
+            server::build_main,
+            server::build_smoke_test,
+        ),
     }
-    paths.push(PathBuf::from("tests/test_smoke.py"));
-    paths.push(PathBuf::from(".github/workflows/ci.yml"));
+
+    plans.push(plan(".github/workflows/ci.yml", |_| {
+        common::build_project_ci_workflow()
+    }));
 
     if spec.sqlite {
-        paths.push(PathBuf::from(format!(
-            "src/{}/database.py",
-            spec.package_name
-        )));
+        plans.push(plan(
+            format!("src/{package_name}/database.py"),
+            sqlite::build_database_module,
+        ));
     }
 
     if spec.grpc {
-        paths.push(PathBuf::from(format!("proto/{}.proto", spec.package_name)));
-        paths.push(PathBuf::from(format!(
-            "src/{}/grpc/__init__.py",
-            spec.package_name
-        )));
-        paths.push(PathBuf::from("tools/generate_grpc.py"));
+        plans.push(plan(
+            format!("proto/{package_name}.proto"),
+            grpc::build_proto,
+        ));
+        plans.push(plan(format!("src/{package_name}/grpc/__init__.py"), |_| {
+            "__all__ = []\n".to_string()
+        }));
+        plans.push(plan("tools/generate_grpc.py", grpc::build_codegen_script));
     }
 
-    paths
+    plans
 }
 
-fn file(path: impl Into<PathBuf>, contents: String) -> GeneratedFile {
-    GeneratedFile {
-        relative_path: path.into(),
-        contents,
+/// 템플릿을 렌더링해 생성할 파일 전체(경로 + 내용)를 돌려준다.
+pub fn render_project(spec: &ProjectSpec) -> Vec<GeneratedFile> {
+    file_plan(spec)
+        .into_iter()
+        .map(|entry| GeneratedFile {
+            relative_path: entry.path,
+            contents: (entry.render)(spec),
+        })
+        .collect()
+}
+
+/// 생성될 파일의 상대 경로만 돌려준다. 내용을 렌더링하지 않으므로 `--dry-run`처럼
+/// 경로만 필요한 경우에 쓴다.
+pub fn project_file_paths(spec: &ProjectSpec) -> Vec<PathBuf> {
+    file_plan(spec)
+        .into_iter()
+        .map(|entry| entry.path)
+        .collect()
+}
+
+fn plan(path: impl Into<PathBuf>, render: fn(&ProjectSpec) -> String) -> FilePlan {
+    FilePlan {
+        path: path.into(),
+        render,
     }
+}
+
+/// GUI/SERVER 템플릿이 공통으로 만드는 파일과 순서(`settings.py`, `logging.py`,
+/// `main.py`, smoke test)를 추가한다. 서로 다른 부분은 각 템플릿의 함수를 넘겨받는다.
+fn push_settings_based_plans(
+    plans: &mut Vec<FilePlan>,
+    spec: &ProjectSpec,
+    build_settings: fn(&ProjectSpec) -> String,
+    build_main: fn(&ProjectSpec) -> String,
+    build_smoke_test: fn(&ProjectSpec) -> String,
+) {
+    let package_name = &spec.package_name;
+    plans.push(plan(
+        format!("src/{package_name}/settings.py"),
+        build_settings,
+    ));
+    plans.push(plan(
+        format!("src/{package_name}/logging.py"),
+        common::build_shared_logging,
+    ));
+    plans.push(plan(format!("src/{package_name}/main.py"), build_main));
+    plans.push(plan("tests/test_smoke.py", build_smoke_test));
 }
 
 #[cfg(test)]
@@ -248,6 +222,50 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn cli_grpc_sqlite_file_paths_keep_their_order() {
+        let mut project = spec(TemplateKind::Cli, true);
+        project.sqlite = true;
+
+        assert_eq!(
+            project_file_paths(&project),
+            vec![
+                PathBuf::from("pyproject.toml"),
+                PathBuf::from("README.md"),
+                PathBuf::from(".gitignore"),
+                PathBuf::from(".python-version"),
+                PathBuf::from(".env.example"),
+                PathBuf::from(".env"),
+                PathBuf::from("config.toml"),
+                PathBuf::from("src/demo_app/__init__.py"),
+                PathBuf::from("src/demo_app/main.py"),
+                PathBuf::from("tests/test_smoke.py"),
+                PathBuf::from(".github/workflows/ci.yml"),
+                PathBuf::from("src/demo_app/database.py"),
+                PathBuf::from("proto/demo_app.proto"),
+                PathBuf::from("src/demo_app/grpc/__init__.py"),
+                PathBuf::from("tools/generate_grpc.py"),
+            ]
+        );
+    }
+
+    #[test]
+    fn gui_and_server_settings_share_the_common_scaffold() {
+        let gui = gui::build_settings(&spec(TemplateKind::Gui, false));
+        let server = server::build_settings(&spec(TemplateKind::Server, false));
+
+        for rendered in [&gui, &server] {
+            assert!(rendered.contains("ROOT_DIR = Path(__file__).resolve().parents[2]"));
+            assert!(rendered.contains("def _as_bool(value: object) -> bool:"));
+            assert!(rendered.contains("env_prefix=\"DEMO_APP\""));
+        }
+
+        assert!(gui.contains("    window_title: str\n"));
+        assert!(!gui.contains("    host: str\n"));
+        assert!(server.contains("    host: str\n"));
+        assert!(!server.contains("    window_title: str\n"));
     }
 
     #[test]

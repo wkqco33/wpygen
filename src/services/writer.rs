@@ -22,7 +22,7 @@ pub fn create_project(
     }
 
     if let Err(err) = write_files(&staging_dir, &files, verbose) {
-        let _ = fs::remove_dir_all(&staging_dir);
+        discard(&staging_dir);
         return Err(err);
     }
 
@@ -30,7 +30,7 @@ pub fn create_project(
         eprintln!("대상 디렉터리로 교체 중: {}", target_dir.display());
     }
     if let Err(err) = replace_target_dir(target_dir, &staging_dir) {
-        let _ = fs::remove_dir_all(&staging_dir);
+        discard(&staging_dir);
         return Err(err);
     }
 
@@ -78,11 +78,7 @@ fn create_staging_dir(target_dir: &Path) -> Result<PathBuf, Error> {
         .file_name()
         .map(|name| name.to_string_lossy().into_owned())
         .unwrap_or_else(|| "project".to_string());
-    let unique = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|duration| duration.as_nanos())
-        .unwrap_or_default();
-    let staging_dir = parent.join(format!(".{name}.wpygen-tmp-{unique}"));
+    let staging_dir = parent.join(format!(".{name}.wpygen-tmp-{}", unique_suffix()));
 
     fs::create_dir_all(&staging_dir).map_err(io_err(&staging_dir))?;
     Ok(staging_dir)
@@ -142,6 +138,12 @@ fn unique_suffix() -> u128 {
         .unwrap_or_default()
 }
 
+/// 스테이징/백업처럼 임시로 만든 디렉터리를 정리한다. 정리 실패는 원래 오류를
+/// 덮어쓸 만큼 중요하지 않으므로 무시한다.
+fn discard(dir: &Path) {
+    let _ = fs::remove_dir_all(dir);
+}
+
 fn io_err(path: &Path) -> impl FnOnce(io::Error) -> Error {
     let path = path.to_path_buf();
     move |source| Error::Io { path, source }
@@ -151,15 +153,7 @@ fn io_err(path: &Path) -> impl FnOnce(io::Error) -> Error {
 mod tests {
     use super::*;
     use crate::models::TemplateKind;
-    use std::time::{SystemTime, UNIX_EPOCH};
-
-    fn unique_temp_dir(name: &str) -> PathBuf {
-        let suffix = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("time went backwards")
-            .as_nanos();
-        std::env::temp_dir().join(format!("wpygen-writer-{name}-{suffix}"))
-    }
+    use crate::testing::unique_temp_dir;
 
     fn cli_spec() -> ProjectSpec {
         ProjectSpec {
@@ -171,9 +165,18 @@ mod tests {
         }
     }
 
+    fn entry_names(dir: &Path) -> Vec<String> {
+        let mut names: Vec<String> = fs::read_dir(dir)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        names.sort();
+        names
+    }
+
     #[test]
     fn rejects_when_target_is_a_file() {
-        let target_dir = unique_temp_dir("target-is-file");
+        let target_dir = unique_temp_dir("writer-target-is-file");
         fs::write(&target_dir, b"not a directory").unwrap();
 
         let result = create_project(&target_dir, &cli_spec(), false, false);
@@ -184,7 +187,7 @@ mod tests {
 
     #[test]
     fn rejects_nonempty_target_without_force() {
-        let target_dir = unique_temp_dir("nonempty");
+        let target_dir = unique_temp_dir("writer-nonempty");
         fs::create_dir_all(&target_dir).unwrap();
         fs::write(target_dir.join("existing.txt"), b"keep me").unwrap();
 
@@ -197,7 +200,7 @@ mod tests {
 
     #[test]
     fn force_replaces_stale_files_from_previous_generation() {
-        let target_dir = unique_temp_dir("force-replace");
+        let target_dir = unique_temp_dir("writer-force-replace");
         fs::create_dir_all(&target_dir).unwrap();
         // 이전 세대에서 남은, 이번 스펙에는 없는 파일(예: sqlite 없이 재생성)
         fs::write(target_dir.join("stale_database.py"), b"stale").unwrap();
@@ -214,7 +217,7 @@ mod tests {
     fn failure_does_not_leave_partial_files_at_target() {
         // target_dir의 부모를 (디렉터리가 아닌) 파일로 만들어서 스테이징 디렉터리
         // 생성 자체가 실패하도록 유도한다. 이 경우 target_dir는 절대 생성되면 안 된다.
-        let bogus_parent = unique_temp_dir("rollback-parent");
+        let bogus_parent = unique_temp_dir("writer-rollback-parent");
         fs::write(&bogus_parent, b"i am a file, not a directory").unwrap();
         let target_under_file = bogus_parent.join("child-project");
 
@@ -223,5 +226,40 @@ mod tests {
         assert!(result.is_err());
         assert!(!target_under_file.exists());
         let _ = fs::remove_file(&bogus_parent);
+    }
+
+    #[test]
+    fn empty_existing_target_is_reused_for_generation() {
+        let target_dir = unique_temp_dir("writer-empty-target");
+        fs::create_dir_all(&target_dir).unwrap();
+
+        let file_count = create_project(&target_dir, &cli_spec(), false, false).unwrap();
+
+        assert!(file_count > 0);
+        assert!(target_dir.join("pyproject.toml").exists());
+        let _ = fs::remove_dir_all(&target_dir);
+    }
+
+    #[test]
+    fn force_replaces_target_without_leaving_temp_directories() {
+        let root = unique_temp_dir("writer-no-leftovers");
+        let target_dir = root.join("project");
+        fs::create_dir_all(&target_dir).unwrap();
+        fs::write(target_dir.join("stale.txt"), b"stale").unwrap();
+
+        create_project(&target_dir, &cli_spec(), true, false).unwrap();
+
+        assert_eq!(entry_names(&root), vec!["project".to_string()]);
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn preview_reports_paths_without_writing_anything() {
+        let target_dir = unique_temp_dir("writer-preview");
+
+        let paths = preview(&target_dir, &cli_spec(), false).unwrap();
+
+        assert!(!paths.is_empty());
+        assert!(!target_dir.exists());
     }
 }

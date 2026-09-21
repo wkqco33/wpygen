@@ -14,6 +14,10 @@ pub enum Error {
         path: PathBuf,
         source: io::Error,
     },
+    CommandSpawnFailed {
+        command: String,
+        source: io::Error,
+    },
     RestoreFailed {
         target: PathBuf,
         replace_source: io::Error,
@@ -36,7 +40,10 @@ impl Error {
             | Self::ConflictingFlags
             | Self::TargetPathIsFile(_)
             | Self::TargetDirectoryNotEmpty(_) => 2,
-            Self::Io { .. } | Self::RestoreFailed { .. } | Self::CommandFailed { .. } => 1,
+            Self::Io { .. }
+            | Self::RestoreFailed { .. }
+            | Self::CommandSpawnFailed { .. }
+            | Self::CommandFailed { .. } => 1,
         }
     }
 }
@@ -89,6 +96,9 @@ impl fmt::Display for Error {
                 replace_source,
                 restore_source
             ),
+            Self::CommandSpawnFailed { command, source } => {
+                write!(f, "명령을 실행할 수 없습니다: {command} ({source})")
+            }
             Self::CommandFailed { command, status } => match status {
                 Some(code) => write!(f, "명령 실행 실패: {command} (exit code {code})"),
                 None => write!(
@@ -104,6 +114,7 @@ impl std::error::Error for Error {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Self::Io { source, .. } => Some(source),
+            Self::CommandSpawnFailed { source, .. } => Some(source),
             Self::RestoreFailed { replace_source, .. } => Some(replace_source),
             _ => None,
         }

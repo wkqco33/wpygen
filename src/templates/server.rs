@@ -3,92 +3,19 @@ use crate::models::ProjectSpec;
 use super::common;
 
 pub(crate) fn build_settings(spec: &ProjectSpec) -> String {
-    let sqlite_fields = if spec.sqlite {
-        "    sqlite_enabled: bool\n    sqlite_path: str\n"
-    } else {
-        ""
-    };
-    let sqlite_defaults = if spec.sqlite {
-        format!(
-            ",\n            \"sqlite\": {{\"enabled\": True, \"path\": \"data/{package}.db\"}}",
-            package = spec.package_name
-        )
-    } else {
-        String::new()
-    };
-    let sqlite_return = if spec.sqlite {
-        format!(
-            ",\n        sqlite_enabled=_as_bool(config.get(\"sqlite.enabled\", True)),\n        sqlite_path=str(config.get(\"sqlite.path\", \"data/{package}.db\"))",
-            package = spec.package_name
-        )
-    } else {
-        String::new()
-    };
-
-    format!(
-        r#"from __future__ import annotations
-
-from dataclasses import dataclass
-from pathlib import Path
-
-from wconfig import load_config
-
-ROOT_DIR = Path(__file__).resolve().parents[2]
-
-
-def _as_bool(value: object) -> bool:
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, str):
-        return value.strip().lower() in {{"1", "true", "t", "yes", "y", "on"}}
-    return bool(value)
-
-
-@dataclass(slots=True)
-class AppConfig:
-    app_name: str
-    debug: bool
-    host: str
-    port: int
-    log_level: str
-    log_file: str | None
-    grpc_enabled: bool
-{sqlite_fields}
-
-
-def load_app_config() -> AppConfig:
-    config = load_config(
-        defaults={{
-            "app": {{
-                "name": "{project_name}",
-                "debug": False,
-                "host": "127.0.0.1",
-                "port": 8000,
-                "grpc_enabled": {grpc_enabled},
-            }},
-            "logging": {{"level": "INFO", "file": None}}{sqlite_defaults},
-        }},
-        files=(ROOT_DIR / "config.toml",),
-        dotenv=ROOT_DIR / ".env",
-        env_prefix="{env_prefix}",
-    )
-    log_file = config.get("logging.file")
-    return AppConfig(
-        app_name=str(config.get("app.name", "{project_name}")),
-        debug=_as_bool(config.get("app.debug", False)),
-        host=str(config.get("app.host", "127.0.0.1")),
-        port=int(config.get("app.port", 8000)),
-        log_level=str(config.get("logging.level", "INFO")),
-        log_file=str(log_file) if log_file else None,
-        grpc_enabled=_as_bool(config.get("app.grpc_enabled", {grpc_enabled})){sqlite_return},
-    )
-"#,
-        project_name = spec.project_name,
-        grpc_enabled = common::python_bool(spec.grpc),
-        env_prefix = common::env_prefix(spec),
-        sqlite_fields = sqlite_fields,
-        sqlite_defaults = sqlite_defaults,
-        sqlite_return = sqlite_return,
+    common::build_settings_module(
+        spec,
+        "    debug: bool\n    host: str\n    port: int\n",
+        concat!(
+            "                \"debug\": False,\n",
+            "                \"host\": \"127.0.0.1\",\n",
+            "                \"port\": 8000,\n",
+        ),
+        concat!(
+            "        debug=_as_bool(config.get(\"app.debug\", False)),\n",
+            "        host=str(config.get(\"app.host\", \"127.0.0.1\")),\n",
+            "        port=int(config.get(\"app.port\", 8000)),\n",
+        ),
     )
 }
 

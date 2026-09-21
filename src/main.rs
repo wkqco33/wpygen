@@ -4,6 +4,8 @@ mod error;
 mod models;
 mod services;
 mod templates;
+#[cfg(test)]
+mod testing;
 
 use wrcli::WrCliError;
 

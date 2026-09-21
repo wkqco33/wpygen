@@ -256,6 +256,111 @@ jobs:
     .to_string()
 }
 
+/// GUI/SERVER 템플릿이 공유하는 `settings.py` 본문을 만든다. 두 템플릿의 차이는
+/// `AppConfig`에 추가되는 필드와 그 기본값·설정 조회뿐이므로 그 조각들만 인자로 받고,
+/// 공통 뼈대(import, `_as_bool`, `load_config` 호출, 로깅/grpc 처리)는 여기서 한 번만
+/// 관리한다. 조각들은 `app_name` 다음, 로깅/grpc 앞에 순서대로 들어간다.
+pub(crate) fn build_settings_module(
+    spec: &ProjectSpec,
+    extra_fields: &str,
+    extra_defaults: &str,
+    extra_arguments: &str,
+) -> String {
+    let project_name = &spec.project_name;
+    let grpc_enabled = python_bool(spec.grpc);
+    let sqlite = SqliteSettingsFragments::new(spec);
+
+    format!(
+        r#"from __future__ import annotations
+
+from dataclasses import dataclass
+from pathlib import Path
+
+from wconfig import load_config
+
+ROOT_DIR = Path(__file__).resolve().parents[2]
+
+
+def _as_bool(value: object) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {{"1", "true", "t", "yes", "y", "on"}}
+    return bool(value)
+
+
+@dataclass(slots=True)
+class AppConfig:
+    app_name: str
+{extra_fields}    log_level: str
+    log_file: str | None
+    grpc_enabled: bool
+{sqlite_fields}
+
+
+def load_app_config() -> AppConfig:
+    config = load_config(
+        defaults={{
+            "app": {{
+                "name": "{project_name}",
+{extra_defaults}                "grpc_enabled": {grpc_enabled},
+            }},
+            "logging": {{"level": "INFO", "file": None}}{sqlite_defaults},
+        }},
+        files=(ROOT_DIR / "config.toml",),
+        dotenv=ROOT_DIR / ".env",
+        env_prefix="{env_prefix}",
+    )
+    log_file = config.get("logging.file")
+    return AppConfig(
+        app_name=str(config.get("app.name", "{project_name}")),
+{extra_arguments}        log_level=str(config.get("logging.level", "INFO")),
+        log_file=str(log_file) if log_file else None,
+        grpc_enabled=_as_bool(config.get("app.grpc_enabled", {grpc_enabled})){sqlite_arguments},
+    )
+"#,
+        extra_fields = extra_fields,
+        extra_defaults = extra_defaults,
+        extra_arguments = extra_arguments,
+        project_name = project_name,
+        grpc_enabled = grpc_enabled,
+        env_prefix = env_prefix(spec),
+        sqlite_fields = sqlite.fields,
+        sqlite_defaults = sqlite.defaults,
+        sqlite_arguments = sqlite.arguments,
+    )
+}
+
+/// sqlite가 켜졌을 때만 `settings.py`에 덧붙는 조각들.
+struct SqliteSettingsFragments {
+    fields: String,
+    defaults: String,
+    arguments: String,
+}
+
+impl SqliteSettingsFragments {
+    fn new(spec: &ProjectSpec) -> Self {
+        if !spec.sqlite {
+            return Self {
+                fields: String::new(),
+                defaults: String::new(),
+                arguments: String::new(),
+            };
+        }
+
+        let package = &spec.package_name;
+        Self {
+            fields: "    sqlite_enabled: bool\n    sqlite_path: str\n".to_string(),
+            defaults: format!(
+                ",\n            \"sqlite\": {{\"enabled\": True, \"path\": \"data/{package}.db\"}}"
+            ),
+            arguments: format!(
+                ",\n        sqlite_enabled=_as_bool(config.get(\"sqlite.enabled\", True)),\n        sqlite_path=str(config.get(\"sqlite.path\", \"data/{package}.db\"))"
+            ),
+        }
+    }
+}
+
 pub(crate) fn build_shared_logging(spec: &ProjectSpec) -> String {
     format!(
         r#"from __future__ import annotations

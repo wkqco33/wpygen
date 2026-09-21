@@ -1,98 +1,130 @@
+use std::path::Path;
+
 use crate::cli::NewArgs;
 use crate::error::Error;
 use crate::models::ProjectSpec;
 use crate::services::{process, writer};
 
 pub fn run(args: NewArgs) -> Result<(), Error> {
-    validate_project_name(&args.name)?;
-    let package_name = normalize_package_name(args.package_name.as_deref().unwrap_or(&args.name))?;
-    let project_name = args.name;
-    let output_root = args.output;
+    let NewArgs {
+        name,
+        template,
+        grpc,
+        sqlite,
+        output,
+        package_name,
+        force,
+        verbose,
+        dry_run,
+        git,
+        sync,
+        lock,
+    } = args;
+
+    validate_project_name(&name)?;
+    let package_name = normalize_package_name(package_name.as_deref().unwrap_or(&name))?;
 
     let spec = ProjectSpec {
-        project_name: project_name.clone(),
+        project_name: name.clone(),
         package_name,
-        template: args.template,
-        grpc: args.grpc,
-        sqlite: args.sqlite,
+        template,
+        grpc,
+        sqlite,
     };
+    let target_dir = output.join(&name);
 
-    let target_dir = output_root.join(&project_name);
-
-    if args.dry_run {
-        let files = writer::preview(&target_dir, &spec, args.force)?;
-        println!("dry-run: {} 아래 생성될 파일 목록", target_dir.display());
-        for path in &files {
-            println!("  {}", path.display());
-        }
-        println!("(dry-run 모드이므로 실제 파일은 생성되지 않았습니다)");
-        return Ok(());
+    if dry_run {
+        return print_dry_run(&target_dir, &spec, force);
     }
 
-    let file_count = writer::create_project(&target_dir, &spec, args.force, args.verbose)?;
+    let file_count = writer::create_project(&target_dir, &spec, force, verbose)?;
 
     println!(
         "생성 완료: {} (template={}, grpc={}, sqlite={}, files={})",
         target_dir.display(),
         spec.template.as_str(),
-        if spec.grpc { "on" } else { "off" },
-        if spec.sqlite { "on" } else { "off" },
+        on_off(spec.grpc),
+        on_off(spec.sqlite),
         file_count
     );
 
-    if args.git {
-        process::run(&target_dir, "git", &["init"])?;
-        process::run(&target_dir, "git", &["add", "-A"])?;
-        process::run(&target_dir, "git", &["commit", "-m", "wpygen init"])?;
-        println!("git 저장소 초기화 및 최초 커밋 완료");
+    if git {
+        init_git_repository(&target_dir)?;
     }
-
-    if args.sync {
-        if args.lock {
-            process::run(&target_dir, "uv", &["lock"])?;
-        }
-        let sync_args: &[&str] = if args.lock {
-            &["sync", "--locked"]
-        } else {
-            &["sync"]
-        };
-        process::run(&target_dir, "uv", sync_args)?;
-        println!("uv sync 완료");
-    } else if args.lock {
-        process::run(&target_dir, "uv", &["lock"])?;
-        println!("uv lock 완료");
+    if sync {
+        uv_sync(&target_dir, lock)?;
+    } else if lock {
+        uv_lock(&target_dir)?;
     }
 
     Ok(())
 }
 
-pub fn normalize_package_name(raw: &str) -> Result<String, Error> {
-    let mapped = raw
-        .trim()
-        .chars()
-        .map(|ch| match ch {
-            'a'..='z' | '0'..='9' | '_' => ch,
-            'A'..='Z' => ch.to_ascii_lowercase(),
-            '-' | ' ' => '_',
-            _ => '\0',
-        })
-        .collect::<String>();
-
-    if mapped.contains('\0') {
-        return Err(Error::InvalidPackageName(raw.to_string()));
+fn print_dry_run(target_dir: &Path, spec: &ProjectSpec, force: bool) -> Result<(), Error> {
+    let files = writer::preview(target_dir, spec, force)?;
+    println!("dry-run: {} 아래 생성될 파일 목록", target_dir.display());
+    for path in &files {
+        println!("  {}", path.display());
     }
+    println!("(dry-run 모드이므로 실제 파일은 생성되지 않았습니다)");
+    Ok(())
+}
 
-    // 연속된 `-`/공백이 `_`로 겹쳐 치환되면서 `__`가 생기지 않도록 인접 언더바를 합치고,
-    // 앞뒤 언더바는 잘라낸다 (예: "my--app-" -> "my_app").
-    let mut normalized = String::with_capacity(mapped.len());
-    for ch in mapped.chars() {
-        if ch == '_' && normalized.ends_with('_') {
+fn init_git_repository(target_dir: &Path) -> Result<(), Error> {
+    process::run(target_dir, "git", &["init"])?;
+    process::run(target_dir, "git", &["add", "-A"])?;
+    process::run(target_dir, "git", &["commit", "-m", "wpygen init"])?;
+    println!("git 저장소 초기화 및 최초 커밋 완료");
+    Ok(())
+}
+
+/// `--sync`와 `--lock`이 함께 지정되면 lockfile을 먼저 확정한 뒤 그 lockfile로만
+/// 동기화한다(`uv sync --locked`).
+fn uv_sync(target_dir: &Path, lock: bool) -> Result<(), Error> {
+    if lock {
+        process::run(target_dir, "uv", &["lock"])?;
+    }
+    let sync_args: &[&str] = if lock {
+        &["sync", "--locked"]
+    } else {
+        &["sync"]
+    };
+    process::run(target_dir, "uv", sync_args)?;
+    println!("uv sync 완료");
+    Ok(())
+}
+
+fn uv_lock(target_dir: &Path) -> Result<(), Error> {
+    process::run(target_dir, "uv", &["lock"])?;
+    println!("uv lock 완료");
+    Ok(())
+}
+
+fn on_off(enabled: bool) -> &'static str {
+    if enabled { "on" } else { "off" }
+}
+
+pub fn normalize_package_name(raw: &str) -> Result<String, Error> {
+    let mut normalized = String::with_capacity(raw.len());
+
+    // 허용되지 않는 문자는 즉시 거부하고, 구분자(`-`, 공백)는 `_`로 통일한다.
+    // 연속 구분자가 `__`로 남지 않도록 합치고, 앞뒤 `_`는 만들지 않는다
+    // (예: "My  App--CLI-" -> "my_app_cli").
+    for ch in raw.trim().chars() {
+        let mapped = match ch {
+            'a'..='z' | '0'..='9' => ch,
+            'A'..='Z' => ch.to_ascii_lowercase(),
+            '-' | ' ' | '_' => '_',
+            _ => return Err(Error::InvalidPackageName(raw.to_string())),
+        };
+
+        if mapped == '_' && (normalized.is_empty() || normalized.ends_with('_')) {
             continue;
         }
-        normalized.push(ch);
+        normalized.push(mapped);
     }
-    let normalized = normalized.trim_matches('_').to_string();
 
+    let normalized = normalized.trim_end_matches('_').to_string();
     if normalized.is_empty() || normalized.starts_with(|ch: char| ch.is_ascii_digit()) {
         return Err(Error::InvalidPackageName(raw.to_string()));
     }
@@ -104,14 +136,14 @@ pub fn normalize_package_name(raw: &str) -> Result<String, Error> {
 /// 쓰이므로, PEP 508 배포명 규칙(첫/끝 글자는 영문자·숫자, 나머지는 `-`, `_`, `.`도 허용)을
 /// 만족하는지 미리 검증한다. 그렇지 않으면 `uv sync` 시점에야 실패하게 된다.
 pub fn validate_project_name(name: &str) -> Result<(), Error> {
-    let boundary_ok = name
-        .chars()
-        .next()
-        .zip(name.chars().last())
-        .is_some_and(|(first, last)| first.is_ascii_alphanumeric() && last.is_ascii_alphanumeric());
+    let is_alphanumeric = |ch: char| ch.is_ascii_alphanumeric();
+    let boundary_ok = matches!(
+        (name.chars().next(), name.chars().last()),
+        (Some(first), Some(last)) if is_alphanumeric(first) && is_alphanumeric(last)
+    );
     let chars_ok = name
         .chars()
-        .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '.'));
+        .all(|ch| is_alphanumeric(ch) || matches!(ch, '-' | '_' | '.'));
 
     if boundary_ok && chars_ok {
         Ok(())
@@ -125,16 +157,25 @@ mod tests {
     use super::*;
     use std::fs;
     use std::path::PathBuf;
-    use std::time::{SystemTime, UNIX_EPOCH};
 
     use crate::models::TemplateKind;
+    use crate::testing::unique_temp_dir;
 
-    fn unique_temp_dir(name: &str) -> PathBuf {
-        let suffix = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("time went backwards")
-            .as_nanos();
-        std::env::temp_dir().join(format!("wpygen-{name}-{suffix}"))
+    fn new_args(name: &str, output: PathBuf) -> NewArgs {
+        NewArgs {
+            name: name.to_string(),
+            template: TemplateKind::Cli,
+            grpc: false,
+            sqlite: false,
+            output,
+            package_name: None,
+            force: false,
+            verbose: false,
+            dry_run: false,
+            git: false,
+            sync: false,
+            lock: false,
+        }
     }
 
     #[test]
@@ -159,6 +200,20 @@ mod tests {
         ));
         assert!(matches!(
             normalize_package_name("bad.name"),
+            Err(Error::InvalidPackageName(_))
+        ));
+    }
+
+    #[test]
+    fn trims_leading_separators_and_rejects_separator_only_names() {
+        assert_eq!(normalize_package_name("___demo").unwrap(), "demo");
+        assert_eq!(normalize_package_name("  demo  ").unwrap(), "demo");
+        assert!(matches!(
+            normalize_package_name("--"),
+            Err(Error::InvalidPackageName(_))
+        ));
+        assert!(matches!(
+            normalize_package_name("   "),
             Err(Error::InvalidPackageName(_))
         ));
     }
@@ -193,7 +248,7 @@ mod tests {
 
     #[test]
     fn creates_cli_project_files() {
-        let target_dir = unique_temp_dir("cli");
+        let target_dir = unique_temp_dir("new-cli");
         let spec = ProjectSpec {
             project_name: "demo-app".to_string(),
             package_name: "demo_app".to_string(),
@@ -214,5 +269,34 @@ mod tests {
         assert!(target_dir.join(".github/workflows/ci.yml").exists());
 
         let _ = fs::remove_dir_all(target_dir);
+    }
+
+    #[test]
+    fn dry_run_generates_no_files() {
+        let root = unique_temp_dir("new-dry-run");
+        fs::create_dir_all(&root).unwrap();
+
+        let mut args = new_args("demo-app", root.clone());
+        args.dry_run = true;
+        args.grpc = true;
+        args.sqlite = true;
+
+        run(args).unwrap();
+
+        assert_eq!(fs::read_dir(&root).unwrap().count(), 0);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn invalid_project_name_fails_before_touching_the_file_system() {
+        let root = unique_temp_dir("new-invalid-name");
+        fs::create_dir_all(&root).unwrap();
+
+        let error = run(new_args("bad name", root.clone())).unwrap_err();
+
+        assert_eq!(error.exit_code(), 2);
+        assert!(matches!(error, Error::InvalidProjectName(_)));
+        assert_eq!(fs::read_dir(&root).unwrap().count(), 0);
+        let _ = fs::remove_dir_all(root);
     }
 }
