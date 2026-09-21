@@ -50,9 +50,16 @@ Rust로 만든 Python 프로젝트 템플릿 생성기입니다.
 태그 예시:
 
 ```bash
-git tag v0.1.0
-git push origin v0.1.0
+# Cargo.toml 의 version 과 태그가 일치해야 합니다 (v0.3.0 ↔ 0.3.0)
+git tag v0.3.0
+git push origin v0.3.0
 ```
+
+빌드는 4개 플랫폼에서 병렬로 수행하고, 릴리스 업로드는 모든 빌드가 끝난 뒤
+`publish` 잡에서 한 번만 수행합니다. 따라서 특정 플랫폼이 실패하면 자산이 일부만
+담긴 릴리스가 공개되지 않고 워크플로우 자체가 실패합니다.
+
+버전·태그·아티팩트 규칙은 [`PACKAGE_GUIDE.md`](PACKAGE_GUIDE.md)를 참고하세요.
 
 이후 `ppm install <owner>/wpygen` 형태로 사용할 수 있는 릴리스 자산 구조를 맞추는 용도입니다.
 
@@ -185,6 +192,7 @@ src/
 ├── cli.rs
 ├── error.rs
 ├── main.rs
+├── testing.rs      # 테스트 전용 헬퍼 (cfg(test))
 ├── cmds/
 │   ├── mod.rs
 │   └── new.rs
@@ -242,6 +250,7 @@ cargo fmt
 ## 참고
 
 - `wpycli`, `wpyconf`, `wpylog`는 공식 PyPI에서 설치됩니다.
+- 릴리스 버전·태그·아티팩트 규칙은 [`PACKAGE_GUIDE.md`](PACKAGE_GUIDE.md)를 참고하세요.
 - 재현 가능한 의존성 설치가 필요하면 생성 시 `--lock`을 사용하고 `uv.lock`을 커밋합니다.
 - 생성된 프로젝트 안에서도 `uv sync` 기준으로 바로 사용할 수 있게 구성됨
 - `ppm`용 릴리스 아티팩트는 GitHub Actions `release` 워크플로우에서 생성됨

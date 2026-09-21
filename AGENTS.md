@@ -84,3 +84,9 @@ cargo test -- --ignored    # uv/PyPI가 필요한 통합 테스트
 GitHub Release에 업로드합니다. `ppm.json`의 `bin_name`(`wpygen`)과 아카이브
 명명 규칙(`wpygen_{os}_{arch}.{ext}`)을 유지하세요. 자세한 규칙은
 `PACKAGE_GUIDE.md`를 참고하세요.
+
+- `Cargo.toml`의 `version`과 git 태그가 일치해야 합니다(`0.3.0` ↔ `v0.3.0`).
+  워크플로우의 `verify-version` 잡이 이를 강제하므로 버전 변경 시 `Cargo.lock`도
+  함께 커밋합니다.
+- 릴리스 업로드는 모든 플랫폼 빌드가 끝난 뒤 `publish` 잡에서 한 번만 수행합니다.
+  특정 플랫폼 자산이 없으면 릴리스가 나오지 않도록 필수 자산 검사를 유지하세요.

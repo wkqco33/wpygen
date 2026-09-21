@@ -10,8 +10,27 @@ permissions:
   contents: write
 
 jobs:
+  verify-version:
+    name: verify-tag-matches-cargo-version
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Compare tag with Cargo.toml version
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -n 1)"
+          if [ "${GITHUB_REF_NAME}" != "v${version}" ]; then
+            echo "::error::태그(${GITHUB_REF_NAME})와 Cargo.toml 버전(v${version})이 다릅니다. Cargo.toml 버전을 먼저 올리세요."
+            exit 1
+          fi
+          echo "태그와 Cargo.toml 버전이 일치합니다: v${version}"
+
   build:
     name: build-${{ matrix.os }}-${{ matrix.arch }}
+    needs: verify-version
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
@@ -22,25 +41,21 @@ jobs:
             os: linux
             arch: amd64
             archive: tar.gz
-            bin_ext: ""
           - runner: macos-15-intel
             target: x86_64-apple-darwin
             os: darwin
             arch: amd64
             archive: tar.gz
-            bin_ext: ""
           - runner: macos-14
             target: aarch64-apple-darwin
             os: darwin
             arch: arm64
             archive: tar.gz
-            bin_ext: ""
           - runner: windows-latest
             target: x86_64-pc-windows-msvc
             os: windows
             arch: amd64
             archive: zip
-            bin_ext: ".exe"
 
     steps:
       - name: Checkout
@@ -63,30 +78,69 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          asset_name="wpygen_${{ matrix.os }}_${{ matrix.arch }}"
           mkdir -p dist
-          cp "target/${{ matrix.target }}/release/wpygen${{ matrix.bin_ext }}" "dist/wpygen"
-          tar -C dist -czf "${asset_name}.tar.gz" wpygen
+          cp "target/${{ matrix.target }}/release/wpygen" dist/wpygen
+          tar -C dist -czf "wpygen_${{ matrix.os }}_${{ matrix.arch }}.tar.gz" wpygen
 
       - name: Package zip asset
         if: matrix.archive == 'zip'
         shell: pwsh
         run: |
-          $assetName = "wpygen_${{ matrix.os }}_${{ matrix.arch }}"
           New-Item -ItemType Directory -Force -Path dist | Out-Null
-          Copy-Item "target/${{ matrix.target }}/release/wpygen${{ matrix.bin_ext }}" "dist/wpygen.exe"
-          Compress-Archive -Path "dist/wpygen.exe" -DestinationPath "$assetName.zip" -Force
+          Copy-Item "target/${{ matrix.target }}/release/wpygen.exe" "dist/wpygen.exe"
+          Compress-Archive -Path "dist/wpygen.exe" -DestinationPath "wpygen_${{ matrix.os }}_${{ matrix.arch }}.zip" -Force
 
-      - name: Generate SHA-256 checksum
-        shell: bash
+      - name: Upload packaged asset
+        uses: actions/upload-artifact@v4
+        with:
+          name: wpygen_${{ matrix.os }}_${{ matrix.arch }}
+          path: wpygen_${{ matrix.os }}_${{ matrix.arch }}.${{ matrix.archive }}
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: publish-release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download packaged assets
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Verify expected assets are present
+        working-directory: dist
         run: |
           set -euo pipefail
-          asset_name="wpygen_${{ matrix.os }}_${{ matrix.arch }}.${{ matrix.archive }}"
-          shasum -a 256 "$asset_name" > "$asset_name.sha256"
+          # 빌드 매트릭스와 일부러 독립적으로 나열한다. 플랫폼 하나가 조용히 빠진 채
+          # 릴리스되는 것을 막는 가드이므로, 플랫폼을 의도적으로 뺄 때는 이 목록도
+          # 함께 고쳐야 한다.
+          expected=(
+            wpygen_linux_amd64.tar.gz
+            wpygen_darwin_amd64.tar.gz
+            wpygen_darwin_arm64.tar.gz
+            wpygen_windows_amd64.zip
+          )
+          missing=0
+          for asset in "${expected[@]}"; do
+            if [ ! -f "$asset" ]; then
+              echo "::error::릴리스 자산이 없습니다: $asset"
+              missing=1
+            fi
+          done
+          exit "$missing"
 
-      - name: Upload release asset
+      - name: Generate SHA-256 checksums
+        working-directory: dist
+        run: |
+          set -euo pipefail
+          for asset in *; do
+            sha256sum "$asset" > "$asset.sha256"
+          done
+          ls -l
+
+      - name: Upload release assets
         uses: softprops/action-gh-release@v3
         with:
-          files: |
-            wpygen_${{ matrix.os }}_${{ matrix.arch }}.${{ matrix.archive }}
-            wpygen_${{ matrix.os }}_${{ matrix.arch }}.${{ matrix.archive }}.sha256
+          files: dist/*
