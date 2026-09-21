@@ -85,6 +85,8 @@ cargo test -- --ignored    # uv/PyPI가 필요한 통합 테스트
 4. `cargo test` (linux/darwin amd64·arm64/windows 4개 플랫폼)
 5. 생성된 프로젝트의 Python 컴파일 및 uv 검증(`--ignored`, ubuntu에서 1회)
 
+의존성은 `.github/dependabot.yml`이 주간으로 갱신 PR을 만든다(cargo, github-actions).
+
 ## 릴리스
 
 `.github/workflows/release.yml`이 태그 푸시 시 플랫폼별 바이너리를 빌드하고

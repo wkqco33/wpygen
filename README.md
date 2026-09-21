@@ -152,7 +152,7 @@ wpygen new [OPTIONS] --template <cli|gui|server> <NAME>
 | `-v, --verbose` | 생성 진행 상황을 상세히 출력 (stderr) |
 | `-n, --dry-run` | 실제로 쓰지 않고 생성될 파일 목록만 출력 (`--git`/`--sync`/`--lock`과 동시 사용 불가) |
 | `--json` | 결과를 기계 판독용 JSON으로 stdout에 출력 |
-| `-q, --quiet` | 진행·상태 메시지를 출력하지 않음 (`--verbose`보다 우선) |
+| `-q, --quiet` | wpygen의 진행·상태 메시지를 출력하지 않음 (자식 명령 출력은 그대로 전달) |
 | `--git` | 생성 후 `git init` + 최초 커밋 실행 |
 | `--sync` | 생성 후 `uv sync` 실행 |
 | `--lock` | 생성 후 `uv lock` 실행 (`--sync`와 함께 사용하면 lock 후 sync) |

@@ -73,7 +73,8 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v10
+        # setup-uv v8+는 immutable release라 floating major 태그가 없어 정확한 버전을 고정한다.
+        uses: astral-sh/setup-uv@v10.1.0
         with:
           # Rust 저장소라 uv 캐시 대상(pyproject.toml/uv.lock)이 없다.
           enable-cache: false

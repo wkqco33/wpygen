@@ -79,6 +79,11 @@ ubuntu에서 한 번만, 생성된 프로젝트 검증(`--ignored`, uv/PyPI 필�
 3. `release.yml` `publish`의 필수 자산 목록
 4. `README.md`의 지원 플랫폼 표와 `CHANGELOG.md`
 
+GitHub Actions 버전은 `@v7`처럼 floating major 태그로 쓰는 것을 기본으로 합니다.
+`astral-sh/setup-uv`는 v8부터 immutable release만 발행해 floating major 태그가 없으므로
+`@v10.1.0`처럼 정확한 버전을 고정합니다. 갱신은 `.github/dependabot.yml`이 만드는
+PR로 처리합니다.
+
 ## 검증 방법
 
 ```bash

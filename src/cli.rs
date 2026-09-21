@@ -110,7 +110,7 @@ pub fn build_cli() -> Command {
                     Flag::new(
                         "quiet",
                         FlagValue::Bool(false),
-                        "진행·상태 메시지를 출력하지 않는다 (--verbose 보다 우선).",
+                        "진행·상태 메시지를 출력하지 않는다. 자식 명령 출력은 그대로 전달한다.",
                     )
                     .short('q'),
                 )

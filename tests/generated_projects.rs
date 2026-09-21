@@ -6,11 +6,18 @@ use std::time::{SystemTime, UNIX_EPOCH};
 const BINARY: &str = env!("CARGO_BIN_EXE_wpygen");
 
 fn unique_temp_dir() -> PathBuf {
-    let suffix = SystemTime::now()
+    static SEQUENCE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+    let nanos = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .expect("time went backwards")
         .as_nanos();
-    std::env::temp_dir().join(format!("wpygen-generated-{suffix}"))
+    let sequence = SEQUENCE.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
+    std::env::temp_dir().join(format!(
+        "wpygen-generated-{}-{nanos}-{sequence}",
+        std::process::id()
+    ))
 }
 
 fn run(dir: &Path, program: &str, args: &[&str]) -> ExitStatus {

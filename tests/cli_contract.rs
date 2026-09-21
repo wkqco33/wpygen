@@ -9,11 +9,18 @@ use std::time::{SystemTime, UNIX_EPOCH};
 const BINARY: &str = env!("CARGO_BIN_EXE_wpygen");
 
 fn unique_temp_dir() -> PathBuf {
-    let suffix = SystemTime::now()
+    static SEQUENCE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+    let nanos = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .expect("time went backwards")
         .as_nanos();
-    std::env::temp_dir().join(format!("wpygen-cli-contract-{suffix}"))
+    let sequence = SEQUENCE.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
+    std::env::temp_dir().join(format!(
+        "wpygen-cli-contract-{}-{nanos}-{sequence}",
+        std::process::id()
+    ))
 }
 
 fn run_wpygen(args: &[&str]) -> Output {
@@ -121,7 +128,13 @@ fn quiet_suppresses_status_messages_but_keeps_the_result() {
 
     assert!(output.status.success(), "{}", stderr(&output));
     assert!(stdout(&output).contains("생성 완료: "));
-    assert_eq!(stderr(&output), "", "quiet인데 상태 메시지가 남았다");
+    // `--quiet`는 wpygen 자신의 상태 메시지만 생략한다. 자식 프로세스(git/uv)의 출력은
+    // 그대로 전달되므로 stderr가 비어 있다고 단정하지 않는다.
+    assert!(
+        !stderr(&output).contains("git 저장소 초기화 및 최초 커밋 완료"),
+        "quiet인데 wpygen 상태 메시지가 남았다: {}",
+        stderr(&output)
+    );
 
     fs::remove_dir_all(root).expect("failed to clean up");
 }

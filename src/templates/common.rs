@@ -237,7 +237,8 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v10
+        # immutable release라 floating major 태그가 없다.
+        uses: astral-sh/setup-uv@v10.1.0
 
       - name: Install dependencies
         run: |
