@@ -252,15 +252,14 @@ fn plain_output_lists_file_paths_one_per_line() {
     assert!(output.status.success(), "{}", stderr(&output));
     let out = stdout(&output);
     let lines: Vec<&str> = out.lines().collect();
-    assert!(!lines.is_empty(), "{out}");
+    assert!(lines.len() >= 9, "파일 수가 너무 적다: {out}");
     assert!(
-        lines
-            .iter()
-            .all(|line| line.starts_with(root_arg) && !line.contains(' ')),
-        "파일 경로만 한 줄씩 나와야 한다: {out}"
+        lines.iter().all(|line| line.starts_with(root_arg)),
+        "모든 줄이 대상 경로 아래여야 한다: {out}"
     );
     assert!(out.contains("pyproject.toml"), "{out}");
     assert!(!out.contains("dry-run:"), "{out}");
+    assert!(!out.contains("생성 완료"), "{out}");
 
     fs::remove_dir_all(root).expect("failed to clean up");
 }

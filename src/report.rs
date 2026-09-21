@@ -252,10 +252,15 @@ mod tests {
             dry_run: true,
         };
 
-        assert_eq!(
-            report.to_plain(),
-            "/tmp/demo-app/pyproject.toml\n/tmp/demo-app/src/demo_app/main.py"
+        // 경로 구분자는 플랫폼마다 다르므로 기대값도 같은 방식으로 조립한다.
+        let expected = format!(
+            "{}\n{}",
+            Path::new("/tmp/demo-app").join("pyproject.toml").display(),
+            Path::new("/tmp/demo-app")
+                .join("src/demo_app/main.py")
+                .display()
         );
+        assert_eq!(report.to_plain(), expected);
     }
 
     #[test]
