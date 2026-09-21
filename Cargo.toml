@@ -7,4 +7,4 @@ description = "uv 기반 Python 프로젝트 템플릿(CLI/GUI/SERVER) 생성기
 repository = "https://github.com/wkqco33/wpygen"
 
 [dependencies]
-wrcli = "0.1"
+wrcli = "0.5"
