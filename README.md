@@ -13,6 +13,55 @@ Rust로 만든 Python 프로젝트 템플릿 생성기입니다.
 | `gui` | `PySide6`, `wpyconf`, `wpylog` | `gRPC`, `SQLite` |
 | `server` | `FastAPI`, `uvicorn`, `wpyconf`, `wpylog` | `gRPC`, `SQLite` |
 
+## 설치
+
+### ppm
+
+```bash
+ppm install wkqco33/wpygen
+```
+
+### GitHub Releases
+
+릴리스 자산은 `wpygen_<os>_<arch>.{tar.gz,zip}` 형식이며, 각 자산마다
+`.sha256` 체크섬이 함께 올라갑니다. 빌드는 GitHub Actions에서만 수행합니다.
+
+```bash
+# 예: darwin arm64
+curl -LO https://github.com/wkqco33/wpygen/releases/latest/download/wpygen_darwin_arm64.tar.gz
+curl -LO https://github.com/wkqco33/wpygen/releases/latest/download/wpygen_darwin_arm64.tar.gz.sha256
+shasum -a 256 -c wpygen_darwin_arm64.tar.gz.sha256
+tar -xzf wpygen_darwin_arm64.tar.gz
+install -m 755 wpygen /usr/local/bin/wpygen
+```
+
+빌드 출처 증명(provenance)은 다음 명령으로 검증합니다.
+
+```bash
+gh attestation verify wpygen_darwin_arm64.tar.gz --repo wkqco33/wpygen
+```
+
+### 소스에서 빌드
+
+Rust 1.85 이상(edition 2024)이 필요합니다.
+
+```bash
+cargo install --git https://github.com/wkqco33/wpygen --locked
+```
+
+## 지원 플랫폼
+
+릴리스와 CI가 함께 검증하는 조합입니다.
+
+| OS | arch | Rust target | 자산 |
+| --- | --- | --- | --- |
+| linux | amd64 | `x86_64-unknown-linux-musl` | `wpygen_linux_amd64.tar.gz` |
+| darwin | amd64 | `x86_64-apple-darwin` | `wpygen_darwin_amd64.tar.gz` |
+| darwin | arm64 | `aarch64-apple-darwin` | `wpygen_darwin_arm64.tar.gz` |
+| windows | amd64 | `x86_64-pc-windows-msvc` | `wpygen_windows_amd64.zip` |
+
+그 외 플랫폼은 소스 빌드로 사용할 수 있지만 릴리스 자산은 제공하지 않습니다.
+
 ## 생성되는 기본 설정
 
 - Python 버전: `>=3.12`
@@ -100,11 +149,31 @@ wpygen new [OPTIONS] --template <cli|gui|server> <NAME>
 | `-o, --output` | 생성할 상위 디렉터리 |
 | `--package-name` | Python 패키지명 직접 지정 |
 | `--force` | 대상 디렉터리가 비어있지 않아도 생성 |
-| `-v, --verbose` | 생성 진행 상황을 상세히 출력 |
-| `--dry-run` | 실제로 쓰지 않고 생성될 파일 목록만 출력 (`--git`/`--sync`/`--lock`과 동시 사용 불가) |
+| `-v, --verbose` | 생성 진행 상황을 상세히 출력 (stderr) |
+| `-n, --dry-run` | 실제로 쓰지 않고 생성될 파일 목록만 출력 (`--git`/`--sync`/`--lock`과 동시 사용 불가) |
+| `--json` | 결과를 기계 판독용 JSON으로 stdout에 출력 |
+| `-q, --quiet` | 진행·상태 메시지를 출력하지 않음 (`--verbose`보다 우선) |
 | `--git` | 생성 후 `git init` + 최초 커밋 실행 |
 | `--sync` | 생성 후 `uv sync` 실행 |
 | `--lock` | 생성 후 `uv lock` 실행 (`--sync`와 함께 사용하면 lock 후 sync) |
+
+## 출력과 종료 코드
+
+- **stdout**: 결과. 생성 요약, `--dry-run` 파일 목록, `--json` JSON 객체.
+- **stderr**: 진행·상태 알림(`-v` 상세 로그, `git`/`uv` 완료), 오류 메시지.
+- `--json`은 stdout에 JSON 객체 하나만 출력합니다. 자식 프로세스(`git`, `uv`)의
+  stdout도 stderr로 돌려 결과를 오염시키지 않습니다.
+- 색상과 박스 장식은 stdout/stderr가 터미널이 아니거나 `NO_COLOR`가 설정되면
+  자동으로 꺼집니다(`TERM=dumb` 포함).
+
+| 종료 코드 | 의미 |
+| --- | --- |
+| `0` | 성공 |
+| `1` | 환경·시스템 오류 (파일 I/O 실패, 외부 명령 실행 실패 등) |
+| `2` | 입력 오류 (잘못된 이름/템플릿, 충돌하는 플래그, 대상 디렉터리 상태, 미인식 플래그) |
+
+`--json` 출력 스키마(키 순서 포함)는 계약으로 취급하며 `CHANGELOG.md`에 변경을
+기록합니다.
 
 ## 쉘 자동완성
 
@@ -127,6 +196,18 @@ cargo run -- new -t cli test_cli
 
 ```bash
 cargo run -- new -t cli --sqlite test_cli
+```
+
+### 생성 계획을 JSON으로 받기
+
+```bash
+wpygen new -t server --grpc --sqlite --dry-run --json my_service | jq '.files[]'
+```
+
+### 자동화에서 조용히 생성하기
+
+```bash
+wpygen new -t cli -q --git --sync my_app
 ```
 
 ### SERVER + gRPC + SQLite
@@ -192,6 +273,7 @@ src/
 ├── cli.rs
 ├── error.rs
 ├── main.rs
+├── report.rs       # 결과 리포트(텍스트/JSON) 생성
 ├── testing.rs      # 테스트 전용 헬퍼 (cfg(test))
 ├── cmds/
 │   ├── mod.rs
@@ -251,6 +333,9 @@ cargo fmt
 
 - `wpycli`, `wpyconf`, `wpylog`는 공식 PyPI에서 설치됩니다.
 - 릴리스 버전·태그·아티팩트 규칙은 [`PACKAGE_GUIDE.md`](PACKAGE_GUIDE.md)를 참고하세요.
+- 버전별 변경 사항은 [`CHANGELOG.md`](CHANGELOG.md)에 기록합니다. `0.y.z` 구간에서는
+  CLI 표면이 아직 안정적이지 않으므로, 하위 호환을 깨는 변경은 MINOR 버전에서
+  일어날 수 있습니다.
 - 재현 가능한 의존성 설치가 필요하면 생성 시 `--lock`을 사용하고 `uv.lock`을 커밋합니다.
 - 생성된 프로젝트 안에서도 `uv sync` 기준으로 바로 사용할 수 있게 구성됨
 - `ppm`용 릴리스 아티팩트는 GitHub Actions `release` 워크플로우에서 생성됨

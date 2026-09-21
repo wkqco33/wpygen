@@ -30,7 +30,8 @@
   의존하지 않게 테스트한다.
 - **통합 테스트**: `tests/generated_projects.rs`에서 실제 바이너리를 실행해
   생성된 프로젝트가 Python으로 컴파일되는지 검증한다. `uv`/PyPI 접근이 필요한
-  테스트는 `#[ignore]`로 표시한다.
+  테스트는 `#[ignore]`로 표시한다. `tests/cli_contract.rs`는 출력 스트림 분리,
+  종료 코드, `--json` 출력, 도움말 내용을 검증한다.
 
 ### 테스트 실행
 
@@ -46,6 +47,7 @@ cargo test -- --ignored    # uv/PyPI가 필요한 통합 테스트
 - `src/cli.rs` — CLI 트리 정의와 인자 파싱(`NewArgs`)
 - `src/cmds/` — 커맨드 실행 로직
 - `src/models/` — 데이터 구조(`ProjectSpec`, `TemplateKind`, `GeneratedFile`)
+- `src/report.rs` — 결과 리포트(텍스트/`--json`) 생성
 - `src/services/` — 파일 생성/쓰기(`writer`), 외부 명령 실행(`process`)
 - `src/templates/` — 템플릿 문자열 생성
 - `src/error.rs` — 오류 타입과 종료 코드 매핑
@@ -59,6 +61,11 @@ cargo test -- --ignored    # uv/PyPI가 필요한 통합 테스트
   드러내야 한다.
 - **오류 처리**: 사용자가 인자를 바꾸면 해결되는 오류는 `Error::exit_code() == 2`,
   환경/시스템 오류는 `1`을 반환한다. 새 오류도 이 규칙을 따른다.
+- **출력 스트림**: 결과(생성 요약, dry-run 목록, `--json` JSON)는 stdout, 진행·상태·
+  오류는 stderr로 보낸다. `--json` 모드에서는 자식 프로세스 stdout도 stderr로
+  돌려 stdout을 JSON 전용으로 유지한다.
+- **CLI 계약**: 플래그, 종료 코드, `--json` 스키마를 바꾸면
+  `tests/cli_contract.rs`와 `CHANGELOG.md`를 함께 갱신한다.
 - **문자열 템플릿**: 생성되는 Python 코드는 `format!`의 `{{ }}` 이스케이프에
   주의한다. Python 불리언은 `True`/`False`(소문자 아님)여야 한다.
 
@@ -70,13 +77,13 @@ cargo test -- --ignored    # uv/PyPI가 필요한 통합 테스트
 
 ## CI
 
-`.github/workflows/ci.yml`에서 다음을 순서대로 검증한다.
+`.github/workflows/ci.yml`에서 다음을 검증한다.
 
 1. gitleaks 시크릿 스캔
 2. `cargo fmt --check`
 3. `cargo clippy -- -D warnings`
-4. `cargo test`
-5. 생성된 프로젝트의 Python 컴파일 검증(`--ignored`)
+4. `cargo test` (linux/darwin amd64·arm64/windows 4개 플랫폼)
+5. 생성된 프로젝트의 Python 컴파일 및 uv 검증(`--ignored`, ubuntu에서 1회)
 
 ## 릴리스
 
@@ -85,8 +92,11 @@ GitHub Release에 업로드합니다. `ppm.json`의 `bin_name`(`wpygen`)과 아�
 명명 규칙(`wpygen_{os}_{arch}.{ext}`)을 유지하세요. 자세한 규칙은
 `PACKAGE_GUIDE.md`를 참고하세요.
 
-- `Cargo.toml`의 `version`과 git 태그가 일치해야 합니다(`0.3.0` ↔ `v0.3.0`).
-  워크플로우의 `verify-version` 잡이 이를 강제하므로 버전 변경 시 `Cargo.lock`도
-  함께 커밋합니다.
+- `Cargo.toml`의 `version`과 git 태그가 일치해야 합니다(`0.4.0` ↔ `v0.4.0`).
+  워크플로우의 `verify-version` 잡이 이를 강제하므로 버전 변경 시 `Cargo.lock`과
+  `CHANGELOG.md`도 함께 커밋합니다.
 - 릴리스 업로드는 모든 플랫폼 빌드가 끝난 뒤 `publish` 잡에서 한 번만 수행합니다.
   특정 플랫폼 자산이 없으면 릴리스가 나오지 않도록 필수 자산 검사를 유지하세요.
+- 릴리스 자산에는 빌드 출처(provenance) attestation이 함께 생성됩니다
+  (`gh attestation verify`로 검증). `publish` 잡의 `id-token: write`,
+  `attestations: write` 권한을 제거하지 마세요.
