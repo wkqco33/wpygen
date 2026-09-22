@@ -4,7 +4,7 @@ use std::time::Duration;
 use crate::error::Error;
 use crate::models::AiProvider;
 
-const DEFAULT_TIMEOUT_SECS: u64 = 120;
+const DEFAULT_TIMEOUT_SECS: u64 = 180;
 
 /// LLM 프롬프트 완성을 위한 추상 클라이언트 트레이트.
 /// 단위 테스트 시 목(Mock) 주입을 위해 사용한다.
@@ -119,10 +119,7 @@ impl HttpClient {
                     message: text,
                 }
             }
-            ureq::Error::Transport(t) => Error::AiHttpFailure {
-                status: 0,
-                message: t.to_string(),
-            },
+            ureq::Error::Transport(t) => map_transport_err(t),
         })?;
 
         let val: Value = resp
@@ -167,10 +164,7 @@ impl HttpClient {
                         message: text,
                     }
                 }
-                ureq::Error::Transport(t) => Error::AiHttpFailure {
-                    status: 0,
-                    message: t.to_string(),
-                },
+                ureq::Error::Transport(t) => map_transport_err(t),
             })?;
 
         let val: Value = resp
@@ -217,10 +211,7 @@ impl HttpClient {
                         message: text,
                     }
                 }
-                ureq::Error::Transport(t) => Error::AiHttpFailure {
-                    status: 0,
-                    message: t.to_string(),
-                },
+                ureq::Error::Transport(t) => map_transport_err(t),
             })?;
 
         let val: Value = resp
@@ -235,6 +226,23 @@ impl HttpClient {
                     "Azure OpenAI 응답에서 content를 찾을 수 없습니다.".to_string(),
                 )
             })
+    }
+}
+
+fn map_transport_err(t: ureq::Transport) -> Error {
+    let msg = t.to_string();
+    if msg.to_ascii_lowercase().contains("timed out") {
+        Error::AiHttpFailure {
+            status: 0,
+            message: format!(
+                "{msg} (요청 시간 초과: 모델 응답 시간이 길어 중단되었습니다. 더 빠른 생성을 원하시면 'wpygen config set ai.model <모델명>'으로 경량 모델을 설정하세요.)"
+            ),
+        }
+    } else {
+        Error::AiHttpFailure {
+            status: 0,
+            message: msg,
+        }
     }
 }
 

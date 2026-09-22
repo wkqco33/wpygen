@@ -8,7 +8,8 @@ use crate::error::Error;
 use crate::models::{AiProvider, GeneratedFile};
 use crate::report::AiReport;
 use crate::services::ai::{
-    HttpClient, LlmClient, build_system_prompt, build_user_prompt, parse_and_validate_plan,
+    AiSpinner, HttpClient, LlmClient, build_system_prompt, build_user_prompt,
+    parse_and_validate_plan,
 };
 use crate::services::process::{self, ChildOutput};
 use crate::services::writer;
@@ -69,18 +70,22 @@ pub fn run_with_client<C: LlmClient>(args: AiArgs, client: &C) -> Result<(), Err
     validate_project_name(&name)?;
     let package_name = normalize_package_name(package_name.as_deref().unwrap_or(&name))?;
 
-    if !quiet && format == OutputFormat::Human {
-        eprintln!(
-            "AI 템플릿 생성 요청 중 (provider={}, model={})...",
-            provider.as_str(),
-            model.as_deref().unwrap_or(provider.default_model())
-        );
-    }
+    let resolved_model = model.unwrap_or_else(|| provider.default_model().to_string());
+
+    let spinner = if !quiet && format == OutputFormat::Human {
+        Some(AiSpinner::start(provider.as_str(), &resolved_model))
+    } else {
+        None
+    };
 
     let system_prompt = build_system_prompt(&name, &package_name);
     let user_prompt = build_user_prompt(&prompt, &name, &package_name);
 
-    let raw_response = client.complete(&system_prompt, &user_prompt)?;
+    let raw_response = client.complete(&system_prompt, &user_prompt);
+    if let Some(s) = spinner {
+        s.finish();
+    }
+    let raw_response = raw_response?;
     let plan = parse_and_validate_plan(&raw_response, &name, &package_name)?;
 
     let target_dir = output.join(&name);
@@ -94,8 +99,6 @@ pub fn run_with_client<C: LlmClient>(args: AiArgs, client: &C) -> Result<(), Err
         },
         quiet,
     };
-
-    let resolved_model = model.unwrap_or_else(|| provider.default_model().to_string());
 
     if dry_run {
         let files = writer::preview_from_paths(&target_dir, &file_paths, force)?;
