@@ -10,6 +10,8 @@
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-09-22
+
 ### Added
 
 - `ai` 서브커맨드: 자연어 요구사항 프롬프트를 바탕으로 AI 모델(Ollama, OpenAI, Azure OpenAI)을 호출하여 맞춤형 Python 프로젝트 템플릿을 생성합니다.

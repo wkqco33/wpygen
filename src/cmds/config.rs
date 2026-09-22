@@ -58,6 +58,7 @@ mod tests {
 
     #[test]
     fn config_init_show_set_get_flow() {
+        let _guard = crate::testing::ENV_MUTEX.lock().unwrap();
         let temp = unique_temp_dir("cmds-config");
         let config_file = temp.join("wpygen/config.toml");
 

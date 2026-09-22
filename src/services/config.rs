@@ -123,6 +123,7 @@ mod tests {
 
     #[test]
     fn init_creates_template_and_rejects_overwrite_without_force() {
+        let _guard = crate::testing::ENV_MUTEX.lock().unwrap();
         let temp = unique_temp_dir("config-init");
         let path = temp.join("wpygen/config.toml");
 

@@ -1,6 +1,9 @@
 use std::path::PathBuf;
+use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
+
+pub static ENV_MUTEX: Mutex<()> = Mutex::new(());
 
 /// 테스트끼리 충돌하지 않는 임시 디렉터리 경로를 만든다. 타임스탬프는 병렬 실행에서
 /// 같은 값이 나올 수 있으므로 프로세스 ID와 호출 순번을 함께 붙인다. 실제 디렉터리
