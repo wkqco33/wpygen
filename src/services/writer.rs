@@ -13,15 +13,24 @@ pub fn create_project(
     force: bool,
     verbose: bool,
 ) -> Result<usize, Error> {
+    let files = templates::render_project(spec);
+    create_project_from_files(target_dir, &files, force, verbose)
+}
+
+pub fn create_project_from_files(
+    target_dir: &Path,
+    files: &[GeneratedFile],
+    force: bool,
+    verbose: bool,
+) -> Result<usize, Error> {
     validate_target_dir(target_dir, force)?;
 
-    let files = templates::render_project(spec);
     let staging_dir = create_staging_dir(target_dir)?;
     if verbose {
         eprintln!("스테이징 디렉터리 생성: {}", staging_dir.display());
     }
 
-    if let Err(err) = write_files(&staging_dir, &files, verbose) {
+    if let Err(err) = write_files(&staging_dir, files, verbose) {
         discard(&staging_dir);
         return Err(err);
     }
@@ -40,8 +49,16 @@ pub fn create_project(
 /// 실제로 쓰지 않고 생성될 파일의 상대 경로 목록만 돌려준다. 대상 디렉터리 검증은
 /// `create_project`와 동일하게 수행한다.
 pub fn preview(target_dir: &Path, spec: &ProjectSpec, force: bool) -> Result<Vec<PathBuf>, Error> {
+    preview_from_paths(target_dir, &templates::project_file_paths(spec), force)
+}
+
+pub fn preview_from_paths(
+    target_dir: &Path,
+    paths: &[PathBuf],
+    force: bool,
+) -> Result<Vec<PathBuf>, Error> {
     validate_target_dir(target_dir, force)?;
-    Ok(templates::project_file_paths(spec))
+    Ok(paths.to_vec())
 }
 
 /// 대상 경로가 파일이 아니고, 비어있거나 `force`가 지정됐는지 확인한다.

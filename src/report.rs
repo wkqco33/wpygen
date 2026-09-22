@@ -82,6 +82,81 @@ impl NewReport<'_> {
     }
 }
 
+pub struct AiReport<'a> {
+    pub project_name: &'a str,
+    pub package_name: &'a str,
+    pub description: &'a str,
+    pub provider: &'a str,
+    pub model: &'a str,
+    pub target_dir: &'a Path,
+    pub files: &'a [PathBuf],
+    pub dry_run: bool,
+}
+
+impl AiReport<'_> {
+    pub fn to_json(&self) -> String {
+        let files = if self.files.is_empty() {
+            "[]".to_string()
+        } else {
+            let items = self
+                .files
+                .iter()
+                .map(|path| format!("    \"{}\"", escape(&path.to_string_lossy())))
+                .collect::<Vec<_>>()
+                .join(",\n");
+            format!("[\n{items}\n  ]")
+        };
+
+        format!(
+            "{{\n  \"wpygen_version\": \"{version}\",\n  \"project_name\": \"{project_name}\",\n  \
+             \"package_name\": \"{package_name}\",\n  \"description\": \"{description}\",\n  \
+             \"provider\": \"{provider}\",\n  \"model\": \"{model}\",\n  \
+             \"target_dir\": \"{target_dir}\",\n  \"dry_run\": {dry_run},\n  \
+             \"file_count\": {file_count},\n  \"files\": {files}\n}}",
+            version = env!("CARGO_PKG_VERSION"),
+            project_name = escape(self.project_name),
+            package_name = escape(self.package_name),
+            description = escape(self.description),
+            provider = escape(self.provider),
+            model = escape(self.model),
+            target_dir = escape(&self.target_dir.to_string_lossy()),
+            dry_run = self.dry_run,
+            file_count = self.files.len(),
+            files = files,
+        )
+    }
+
+    pub fn to_plain(&self) -> String {
+        self.files
+            .iter()
+            .map(|path| self.target_dir.join(path).display().to_string())
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    pub fn to_text(&self) -> String {
+        if self.dry_run {
+            let mut text = format!(
+                "dry-run: {} 아래 생성될 파일 목록",
+                self.target_dir.display()
+            );
+            for path in self.files {
+                text.push_str(&format!("\n  {}", path.display()));
+            }
+            text.push_str("\n(dry-run 모드이므로 실제 파일은 생성되지 않았습니다)");
+            return text;
+        }
+
+        format!(
+            "AI 프로젝트 생성 완료: {} (provider={}, model={}, files={})",
+            self.target_dir.display(),
+            self.provider,
+            self.model,
+            self.files.len()
+        )
+    }
+}
+
 fn on_off(enabled: bool) -> &'static str {
     if enabled { "on" } else { "off" }
 }
@@ -273,5 +348,29 @@ mod tests {
         };
 
         assert_eq!(report.to_plain(), "");
+    }
+
+    #[test]
+    fn ai_report_generates_valid_json() {
+        let files = vec![PathBuf::from("pyproject.toml")];
+        let report = AiReport {
+            project_name: "ai-svc",
+            package_name: "ai_svc",
+            description: "AI Service",
+            provider: "ollama",
+            model: "llama3.2",
+            target_dir: Path::new("/tmp/ai-svc"),
+            files: &files,
+            dry_run: false,
+        };
+
+        let json = report.to_json();
+        assert!(json.contains("\"project_name\": \"ai-svc\""));
+        assert!(json.contains("\"provider\": \"ollama\""));
+        assert!(json.contains("\"model\": \"llama3.2\""));
+        assert_eq!(
+            report.to_text(),
+            "AI 프로젝트 생성 완료: /tmp/ai-svc (provider=ollama, model=llama3.2, files=1)"
+        );
     }
 }

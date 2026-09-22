@@ -5,8 +5,9 @@ use wrcli::style::{Color, Panel, Style, stdout_is_styled};
 use wrcli::{Command, CommandContext, Flag, FlagValue, OutputFormat, WrCliError};
 
 use crate::cmds;
+use crate::cmds::ai::AiArgs;
 use crate::error::Error;
-use crate::models::TemplateKind;
+use crate::models::{AiProvider, TemplateKind};
 
 const DOCS_URL: &str = "https://github.com/wkqco33/wpygen#readme";
 const ISSUES_URL: &str = "https://github.com/wkqco33/wpygen/issues";
@@ -116,6 +117,95 @@ pub fn build_cli() -> Command {
             }),
     )
     .subcommand(
+        Command::new("ai")
+            .short("자연어 프롬프트로 맞춤형 Python 프로젝트 템플릿을 생성한다.")
+            .long(
+                "자연어 요구사항을 바탕으로 AI 모델(Ollama, OpenAI, Azure OpenAI)을 통해\n\
+                 프로젝트 구조와 코드를 설계하고 생성합니다.\n\
+                 인자: <PROMPT> 프로젝트 생성 요구사항 프롬프트",
+            )
+            .example("wpygen ai --name my_app \"FastAPI와 Redis 기반 비동기 API 서버\"")
+            .example("wpygen ai --name cli_tool --provider openai --model gpt-4o-mini \"CLI 파일 처리기\"")
+            .example("wpygen ai --name svc --provider azure-openai --endpoint https://my.openai.azure.com --model gpt-4o \"마이크로서비스\"")
+            .args(exact_args(1))
+            .flag(
+                Flag::new(
+                    "name",
+                    FlagValue::String(String::new()),
+                    "생성할 프로젝트(디렉터리) 이름",
+                )
+                .required(),
+            )
+            .flag(Flag::new(
+                "provider",
+                FlagValue::String("ollama".to_owned()),
+                "AI 프로바이더 (ollama|openai|azure-openai)",
+            ))
+            .flag(Flag::new(
+                "model",
+                FlagValue::String(String::new()),
+                "사용할 AI 모델 이름 (기본값: 프로바이더 기본 모델)",
+            ))
+            .flag(Flag::new(
+                "endpoint",
+                FlagValue::String(String::new()),
+                "AI API 엔드포인트 URL",
+            ))
+            .flag(Flag::new(
+                "api-key",
+                FlagValue::String(String::new()),
+                "AI API 인증 키",
+            ))
+            .flag(
+                Flag::new(
+                    "output",
+                    FlagValue::String(".".to_owned()),
+                    "프로젝트를 생성할 상위 디렉터리",
+                )
+                .short('o'),
+            )
+            .flag(Flag::new(
+                "package-name",
+                FlagValue::String(String::new()),
+                "Python 패키지명 (기본값: 프로젝트명 기반 정규화)",
+            ))
+            .flag(
+                Flag::new(
+                    "verbose",
+                    FlagValue::Bool(false),
+                    "생성 진행 상황을 상세히 출력한다.",
+                )
+                .short('v'),
+            )
+            .flag(
+                Flag::new(
+                    "dry-run",
+                    FlagValue::Bool(false),
+                    "실제로 파일을 쓰지 않고, 생성될 파일 경로만 출력한다.",
+                )
+                .short('n'),
+            )
+            .flag(Flag::new(
+                "git",
+                FlagValue::Bool(false),
+                "생성 후 `git init` 및 최초 커밋을 실행한다.",
+            ))
+            .flag(Flag::new(
+                "sync",
+                FlagValue::Bool(false),
+                "생성 후 `uv sync` 를 실행한다.",
+            ))
+            .flag(Flag::new(
+                "lock",
+                FlagValue::Bool(false),
+                "생성 후 `uv lock` 을 실행한다.",
+            ))
+            .on_run_e(|ctx| {
+                let args = parse_ai_args(ctx).map_err(WrCliError::user)?;
+                cmds::ai::run(args).map_err(WrCliError::user)
+            }),
+    )
+    .subcommand(
         Command::new("completions")
             .short("쉘 자동완성 스크립트를 표준 출력으로 생성한다.")
             .example("wpygen completions bash")
@@ -193,6 +283,68 @@ impl NewArgs {
             lock,
         })
     }
+}
+
+fn parse_ai_args(ctx: &CommandContext) -> Result<AiArgs, Error> {
+    let prompt = ctx.args.first().cloned().unwrap_or_default();
+    let name = ctx.flags.get_string("name").unwrap_or_default().to_string();
+    let provider_str = ctx.flags.get_string("provider").unwrap_or("ollama");
+    let provider = AiProvider::from_str(provider_str)?;
+
+    let model = ctx
+        .flags
+        .get_string("model")
+        .map(str::to_owned)
+        .filter(|s| !s.is_empty());
+    let endpoint = ctx
+        .flags
+        .get_string("endpoint")
+        .map(str::to_owned)
+        .filter(|s| !s.is_empty());
+    let api_key = ctx
+        .flags
+        .get_string("api-key")
+        .map(str::to_owned)
+        .filter(|s| !s.is_empty());
+
+    let output = PathBuf::from(ctx.flags.get_string("output").unwrap_or("."));
+    let package_name = ctx
+        .flags
+        .get_string("package-name")
+        .map(str::to_owned)
+        .filter(|s| !s.is_empty());
+
+    let force = ctx.is_force();
+    let verbose = ctx.flags.get_bool("verbose").unwrap_or(false);
+    let dry_run = ctx.flags.get_bool("dry-run").unwrap_or(false);
+    let format = ctx.output_format();
+    let quiet = ctx.is_quiet();
+    let git = ctx.flags.get_bool("git").unwrap_or(false);
+    let sync = ctx.flags.get_bool("sync").unwrap_or(false);
+    let lock = ctx.flags.get_bool("lock").unwrap_or(false);
+
+    if dry_run && (git || sync || lock) {
+        return Err(Error::ConflictingFlags);
+    }
+
+    Ok(AiArgs {
+        prompt,
+        name,
+        provider,
+        model,
+        endpoint,
+        api_key,
+        output,
+        package_name,
+        force,
+        verbose,
+        dry_run,
+        format,
+        quiet,
+        git,
+        sync,
+        lock,
+    })
 }
 
 /// clig.dev 표준 플래그를 루트 커맨드에 persistent로 등록한다. 라이브러리의

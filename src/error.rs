@@ -27,6 +27,16 @@ pub enum Error {
         command: String,
         status: Option<i32>,
     },
+    InvalidAiProvider(String),
+    AiMissingApiKey(String),
+    AiInvalidEndpoint(String),
+    PathTraversalViolation(PathBuf),
+    EmptyPrompt,
+    AiHttpFailure {
+        status: u16,
+        message: String,
+    },
+    AiInvalidResponse(String),
 }
 
 impl Error {
@@ -39,11 +49,18 @@ impl Error {
             | Self::InvalidTemplate(_)
             | Self::ConflictingFlags
             | Self::TargetPathIsFile(_)
-            | Self::TargetDirectoryNotEmpty(_) => 2,
+            | Self::TargetDirectoryNotEmpty(_)
+            | Self::InvalidAiProvider(_)
+            | Self::AiMissingApiKey(_)
+            | Self::AiInvalidEndpoint(_)
+            | Self::PathTraversalViolation(_)
+            | Self::EmptyPrompt => 2,
             Self::Io { .. }
             | Self::RestoreFailed { .. }
             | Self::CommandSpawnFailed { .. }
-            | Self::CommandFailed { .. } => 1,
+            | Self::CommandFailed { .. }
+            | Self::AiHttpFailure { .. }
+            | Self::AiInvalidResponse(_) => 1,
         }
     }
 }
@@ -106,6 +123,31 @@ impl fmt::Display for Error {
                     "명령 실행 실패: {command} (종료 코드 없음, 시그널로 종료됨)"
                 ),
             },
+            Self::InvalidAiProvider(provider) => write!(
+                f,
+                "지원하지 않는 AI 프로바이더입니다: {provider:?} (허용: ollama, openai, azure-openai)"
+            ),
+            Self::AiMissingApiKey(provider) => write!(
+                f,
+                "{provider} 프로바이더 사용을 위한 API 키가 설정되지 않았습니다. --api-key 플래그 또는 환경 변수를 설정하세요."
+            ),
+            Self::AiInvalidEndpoint(msg) => {
+                write!(f, "AI 엔드포인트 URL이 올바르지 않습니다: {msg}")
+            }
+            Self::PathTraversalViolation(path) => {
+                write!(
+                    f,
+                    "보안 위반: AI가 생성한 경로가 허용된 범위를 벗어납니다: {}",
+                    path.display()
+                )
+            }
+            Self::EmptyPrompt => write!(f, "AI 프롬프트가 비어있습니다. 프롬프트를 입력하세요."),
+            Self::AiHttpFailure { status, message } => {
+                write!(f, "AI API 요청 실패 (HTTP {status}): {message}")
+            }
+            Self::AiInvalidResponse(msg) => {
+                write!(f, "AI 응답 파싱 실패: {msg}")
+            }
         }
     }
 }
@@ -118,5 +160,38 @@ impl std::error::Error for Error {
             Self::RestoreFailed { replace_source, .. } => Some(replace_source),
             _ => None,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ai_user_errors_exit_with_code_2() {
+        assert_eq!(Error::InvalidAiProvider("unknown".into()).exit_code(), 2);
+        assert_eq!(Error::AiMissingApiKey("openai".into()).exit_code(), 2);
+        assert_eq!(
+            Error::AiInvalidEndpoint("invalid url".into()).exit_code(),
+            2
+        );
+        assert_eq!(
+            Error::PathTraversalViolation(PathBuf::from("../bad")).exit_code(),
+            2
+        );
+        assert_eq!(Error::EmptyPrompt.exit_code(), 2);
+    }
+
+    #[test]
+    fn ai_system_errors_exit_with_code_1() {
+        assert_eq!(
+            Error::AiHttpFailure {
+                status: 500,
+                message: "Internal error".into()
+            }
+            .exit_code(),
+            1
+        );
+        assert_eq!(Error::AiInvalidResponse("json error".into()).exit_code(), 1);
     }
 }

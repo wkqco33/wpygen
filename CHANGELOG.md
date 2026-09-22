@@ -10,6 +10,15 @@
 
 ## [Unreleased]
 
+### Added
+
+- `ai` 서브커맨드: 자연어 요구사항 프롬프트를 바탕으로 AI 모델(Ollama, OpenAI, Azure OpenAI)을 호출하여 맞춤형 Python 프로젝트 템플릿을 생성합니다.
+  - `--name <NAME>` 필수 플래그로 프로젝트 디렉터리명을 지정합니다.
+  - 기본 프로바이더로 Ollama(`http://localhost:11434`, 기본 모델 `llama3.2`)를 지원하며, OpenAI 및 Azure OpenAI 호환 규격도 지원합니다.
+  - `--provider`, `--model`, `--endpoint`, `--api-key` 플래그 및 환경 변수(`OPENAI_API_KEY`, `AZURE_OPENAI_API_KEY`, `WPYGEN_AI_KEY`)를 통해 유연하게 설정할 수 있습니다.
+  - 상위 디렉터리 탐색(`..`) 및 절대 경로를 차단하는 보안 경로 검증(`validate_relative_path`)이 적용됩니다.
+  - 기존 전역 플래그(`--dry-run`, `--json`, `--plain`, `--quiet`, `--force`) 및 후처리 플래그(`--git`, `--sync`, `--lock`)와 동일하게 연동됩니다.
+
 ## [0.5.0] - 2026-09-21
 
 ### Added

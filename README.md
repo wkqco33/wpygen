@@ -135,24 +135,67 @@ cargo run -- new --help
 
 ## 명령 형식
 
+### `new` 커맨드 (기본 템플릿 생성)
+
 ```bash
 wpygen new [OPTIONS] --template <cli|gui|server> <NAME>
 ```
 
-### 옵션
+#### 옵션
 
 | 옵션 | 설명 |
 | --- | --- |
-| `-t, --template` | 생성할 템플릿 종류 |
+| `-t, --template` | 생성할 템플릿 종류 (cli\|gui\|server) [필수] |
 | `--grpc` | gRPC 세팅 추가 |
 | `--sqlite` | SQLite 세팅 추가 |
-| `-o, --output` | 생성할 상위 디렉터리 |
+| `-o, --output` | 생성할 상위 디렉터리 (기본값: `.`) |
 | `--package-name` | Python 패키지명 직접 지정 |
 | `-v, --verbose` | 생성 진행 상황을 상세히 출력 (stderr) |
 | `-n, --dry-run` | 실제로 쓰지 않고 생성될 파일 경로만 출력 (`--git`/`--sync`/`--lock`과 동시 사용 불가) |
 | `--git` | 생성 후 `git init` + 최초 커밋 실행 |
 | `--sync` | 생성 후 `uv sync` 실행 |
 | `--lock` | 생성 후 `uv lock` 실행 (`--sync`와 함께 사용하면 lock 후 sync) |
+
+### `ai` 커맨드 (AI 맞춤형 템플릿 생성)
+
+자연어 요구사항을 바탕으로 Ollama, OpenAI, Azure OpenAI 모델을 통해 프로젝트 구조와 코드를 설계하고 생성합니다.
+
+```bash
+wpygen ai [OPTIONS] --name <NAME> "<PROMPT>"
+```
+
+#### 예시
+
+```bash
+# 로컬 Ollama를 사용한 프로젝트 생성 (기본값)
+wpygen ai --name order_svc "FastAPI와 Redis, PostgreSQL을 쓰는 주문 처리 서비스"
+
+# OpenAI 모델 지정
+wpygen ai --name worker_app --provider openai --model gpt-4o-mini "Celery 비동기 작업 큐"
+
+# Azure OpenAI 엔드포인트 지정
+wpygen ai --name enterprise_app --provider azure-openai --endpoint https://my-res.openai.azure.com --model gpt-4o "엔터프라이즈 데이터 파이프라인"
+
+# 생성될 파일 미리보기
+wpygen ai --name test_app --dry-run "간단한 웹 스크래퍼 CLI"
+```
+
+#### 옵션
+
+| 옵션 | 설명 |
+| --- | --- |
+| `--name` | 생성할 프로젝트(디렉터리) 이름 [필수] |
+| `--provider` | AI 프로바이더 (`ollama`\|`openai`\|`azure-openai`, 기본값: `ollama`) |
+| `--model` | 사용할 모델 이름 (기본값: ollama는 `llama3.2`, openai는 `gpt-4o-mini`) |
+| `--endpoint` | API 엔드포인트 URL (기본값: ollama는 `http://localhost:11434`, openai는 `https://api.openai.com/v1`) |
+| `--api-key` | AI API 인증 키 (`OPENAI_API_KEY`, `AZURE_OPENAI_API_KEY`, `WPYGEN_AI_KEY` 환경 변수로도 설정 가능) |
+| `-o, --output` | 생성할 상위 디렉터리 (기본값: `.`) |
+| `--package-name` | Python 패키지명 직접 지정 |
+| `-v, --verbose` | 생성 진행 상황 상세 출력 |
+| `-n, --dry-run` | 실제로 쓰지 않고 생성될 파일 경로만 출력 |
+| `--git` | 생성 후 `git init` + 최초 커밋 실행 |
+| `--sync` | 생성 후 `uv sync` 실행 |
+| `--lock` | 생성 후 `uv lock` 실행 |
 
 ### 전역 플래그
 

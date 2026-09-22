@@ -301,3 +301,56 @@ fn completions_print_to_stdout() {
     assert!(output.status.success(), "{}", stderr(&output));
     assert!(stdout(&output).contains("wpygen"));
 }
+
+#[test]
+fn ai_subcommand_help_documents_flags_and_examples() {
+    let output = run_wpygen(&["ai", "--help"]);
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    let out = stdout(&output);
+    assert!(out.contains("wpygen ai [flags]"), "{out}");
+    assert!(out.contains("--name"), "{out}");
+    assert!(out.contains("--provider"), "{out}");
+    assert!(out.contains("--model"), "{out}");
+    assert!(out.contains("Examples:"), "{out}");
+    assert!(out.contains("wpygen ai --name"), "{out}");
+}
+
+#[test]
+fn ai_requires_name_flag() {
+    let output = run_wpygen(&["ai", "fastapi service"]);
+
+    assert_eq!(output.status.code(), Some(2), "{}", stderr(&output));
+    assert!(
+        stderr(&output).contains("name") || stderr(&output).contains("required"),
+        "{}",
+        stderr(&output)
+    );
+}
+
+#[test]
+fn ai_invalid_provider_exits_with_code_2() {
+    let output = run_wpygen(&["ai", "--name", "my_app", "--provider", "invalid_p", "test"]);
+
+    assert_eq!(output.status.code(), Some(2), "{}", stderr(&output));
+    assert!(
+        stderr(&output).contains("지원하지 않는 AI 프로바이더"),
+        "{}",
+        stderr(&output)
+    );
+}
+
+#[test]
+fn ai_conflicting_flags_exits_with_code_2() {
+    let output = run_wpygen(&[
+        "ai",
+        "--name",
+        "my_app",
+        "--dry-run",
+        "--git",
+        "test prompt",
+    ]);
+
+    assert_eq!(output.status.code(), Some(2), "{}", stderr(&output));
+    assert!(stderr(&output).contains("--dry-run"), "{}", stderr(&output));
+}
