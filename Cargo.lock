@@ -745,8 +745,10 @@ dependencies = [
 name = "wpygen"
 version = "0.5.0"
 dependencies = [
+ "dirs",
  "serde",
  "serde_json",
+ "toml",
  "ureq",
  "wrcli",
 ]

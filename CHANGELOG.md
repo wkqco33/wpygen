@@ -17,7 +17,13 @@
   - 기본 프로바이더로 Ollama(`http://localhost:11434`, 기본 모델 `llama3.2`)를 지원하며, OpenAI 및 Azure OpenAI 호환 규격도 지원합니다.
   - `--provider`, `--model`, `--endpoint`, `--api-key` 플래그 및 환경 변수(`OPENAI_API_KEY`, `AZURE_OPENAI_API_KEY`, `WPYGEN_AI_KEY`)를 통해 유연하게 설정할 수 있습니다.
   - 상위 디렉터리 탐색(`..`) 및 절대 경로를 차단하는 보안 경로 검증(`validate_relative_path`)이 적용됩니다.
-  - 기존 전역 플래그(`--dry-run`, `--json`, `--plain`, `--quiet`, `--force`) 및 후처리 플래그(`--git`, `--sync`, `--lock`)와 동일하게 연동됩니다.
+- `config` 서브커맨드: 플랫폼별 기본 디렉터리에 저장되는 설정 파일(`config.toml`)을 조회, 초기화 및 수정합니다.
+  - `config init [--force]`: 기본 설정 템플릿 생성.
+  - `config show [--json]`: 현재 설정 파일 내용 출력.
+  - `config path`: 설정 파일의 전체 절대 경로 출력.
+  - `config get <KEY>`: 특정 설정값 조회.
+  - `config set <KEY> <VALUE>`: 설정값 변경 및 저장 (`ai.provider`, `ai.model`, `ai.endpoint`, `ai.api_key`, `defaults.output`).
+- `wpygen ai` 커맨드에서 CLI 플래그가 지정되지 않았을 때 `config.toml`의 설정값을 자동으로 기본값으로 채택하는 폴백 연동.
 
 ## [0.5.0] - 2026-09-21
 

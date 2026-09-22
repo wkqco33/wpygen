@@ -37,6 +37,10 @@ pub enum Error {
         message: String,
     },
     AiInvalidResponse(String),
+    InvalidConfigKey(String),
+    ConfigFileAlreadyExists(PathBuf),
+    ConfigHomeNotFound,
+    ConfigParseFailure(String),
 }
 
 impl Error {
@@ -54,13 +58,17 @@ impl Error {
             | Self::AiMissingApiKey(_)
             | Self::AiInvalidEndpoint(_)
             | Self::PathTraversalViolation(_)
-            | Self::EmptyPrompt => 2,
+            | Self::EmptyPrompt
+            | Self::InvalidConfigKey(_)
+            | Self::ConfigFileAlreadyExists(_) => 2,
             Self::Io { .. }
             | Self::RestoreFailed { .. }
             | Self::CommandSpawnFailed { .. }
             | Self::CommandFailed { .. }
             | Self::AiHttpFailure { .. }
-            | Self::AiInvalidResponse(_) => 1,
+            | Self::AiInvalidResponse(_)
+            | Self::ConfigHomeNotFound
+            | Self::ConfigParseFailure(_) => 1,
         }
     }
 }
@@ -148,6 +156,22 @@ impl fmt::Display for Error {
             Self::AiInvalidResponse(msg) => {
                 write!(f, "AI 응답 파싱 실패: {msg}")
             }
+            Self::InvalidConfigKey(key) => write!(
+                f,
+                "유효하지 않은 설정 키입니다: {key:?} (허용 키: ai.provider, ai.model, ai.endpoint, ai.api_key, defaults.output)"
+            ),
+            Self::ConfigFileAlreadyExists(path) => write!(
+                f,
+                "설정 파일이 이미 존재합니다: {} (--force 로 덮어쓰기 가능)",
+                path.display()
+            ),
+            Self::ConfigHomeNotFound => write!(
+                f,
+                "사용자 설정 디렉터리를 찾을 수 없습니다 ($HOME 또는 $XDG_CONFIG_HOME 확인 필요)"
+            ),
+            Self::ConfigParseFailure(msg) => {
+                write!(f, "설정 파일 파싱 실패: {msg}")
+            }
         }
     }
 }
@@ -180,6 +204,11 @@ mod tests {
             2
         );
         assert_eq!(Error::EmptyPrompt.exit_code(), 2);
+        assert_eq!(Error::InvalidConfigKey("bad.key".into()).exit_code(), 2);
+        assert_eq!(
+            Error::ConfigFileAlreadyExists(PathBuf::from("config.toml")).exit_code(),
+            2
+        );
     }
 
     #[test]
@@ -187,11 +216,16 @@ mod tests {
         assert_eq!(
             Error::AiHttpFailure {
                 status: 500,
-                message: "Internal error".into()
+                message: "Internal error".into(),
             }
             .exit_code(),
             1
         );
         assert_eq!(Error::AiInvalidResponse("json error".into()).exit_code(), 1);
+        assert_eq!(Error::ConfigHomeNotFound.exit_code(), 1);
+        assert_eq!(
+            Error::ConfigParseFailure("parse error".into()).exit_code(),
+            1
+        );
     }
 }

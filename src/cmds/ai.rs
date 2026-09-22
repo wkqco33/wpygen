@@ -319,4 +319,19 @@ mod tests {
         assert!(matches!(err, Error::InvalidProjectName(_)));
         let _ = fs::remove_dir_all(temp);
     }
+
+    #[test]
+    fn run_ai_uses_resolved_model_in_report() {
+        let temp = unique_temp_dir("ai-resolved-model");
+        let mock_json = r#"{
+            "files": [{ "path": "pyproject.toml", "content": "" }]
+        }"#;
+        let client = MockClient::success(mock_json);
+        let mut args = sample_ai_args("demo-custom", temp.clone());
+        args.model = Some("custom-coder".into());
+        args.dry_run = true;
+
+        assert!(run_with_client(args, &client).is_ok());
+        let _ = fs::remove_dir_all(temp);
+    }
 }

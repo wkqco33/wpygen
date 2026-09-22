@@ -138,8 +138,8 @@ pub fn build_cli() -> Command {
             )
             .flag(Flag::new(
                 "provider",
-                FlagValue::String("ollama".to_owned()),
-                "AI 프로바이더 (ollama|openai|azure-openai)",
+                FlagValue::String(String::new()),
+                "AI 프로바이더 (ollama|openai|azure-openai) (기본값: config 또는 ollama)",
             ))
             .flag(Flag::new(
                 "model",
@@ -205,6 +205,7 @@ pub fn build_cli() -> Command {
                 cmds::ai::run(args).map_err(WrCliError::user)
             }),
     )
+    .subcommand(config_command())
     .subcommand(
         Command::new("completions")
             .short("쉘 자동완성 스크립트를 표준 출력으로 생성한다.")
@@ -217,6 +218,58 @@ pub fn build_cli() -> Command {
                 Ok(())
             }),
     )
+}
+
+fn config_command() -> Command {
+    Command::new("config")
+        .short("wpygen 전역 설정을 관리한다.")
+        .long("플랫폼별 기본 경로에 저장되는 설정 파일(config.toml)을 조회 및 수정합니다.")
+        .example("wpygen config init")
+        .example("wpygen config show")
+        .example("wpygen config path")
+        .example("wpygen config set ai.provider openai")
+        .example("wpygen config set ai.model gpt-4o-mini")
+        .example("wpygen config get ai.provider")
+        .subcommand(
+            Command::new("init")
+                .short("기본 템플릿으로 설정 파일을 초기화한다.")
+                .example("wpygen config init")
+                .example("wpygen config init --force")
+                .on_run_e(|ctx| {
+                    cmds::config::init(ctx.is_force(), ctx.is_quiet()).map_err(WrCliError::user)
+                }),
+        )
+        .subcommand(
+            Command::new("show")
+                .short("현재 설정 파일의 내용을 출력한다.")
+                .example("wpygen config show")
+                .example("wpygen config show --json")
+                .on_run_e(|ctx| cmds::config::show(ctx.output_format()).map_err(WrCliError::user)),
+        )
+        .subcommand(
+            Command::new("path")
+                .short("설정 파일의 전체 경로를 출력한다.")
+                .example("wpygen config path")
+                .on_run_e(|_ctx| cmds::config::path().map_err(WrCliError::user)),
+        )
+        .subcommand(
+            Command::new("get")
+                .short("지정한 키의 설정값을 출력한다.")
+                .example("wpygen config get ai.provider")
+                .args(exact_args(1))
+                .on_run_e(|ctx| cmds::config::get(&ctx.args[0]).map_err(WrCliError::user)),
+        )
+        .subcommand(
+            Command::new("set")
+                .short("지정한 키의 설정값을 변경하고 저장한다.")
+                .example("wpygen config set ai.provider openai")
+                .example("wpygen config set ai.model gpt-4o-mini")
+                .args(exact_args(2))
+                .on_run_e(|ctx| {
+                    cmds::config::set(&ctx.args[0], &ctx.args[1], ctx.is_quiet())
+                        .map_err(WrCliError::user)
+                }),
+        )
 }
 
 /// `new` 서브커맨드의 파싱 결과.
@@ -288,26 +341,45 @@ impl NewArgs {
 fn parse_ai_args(ctx: &CommandContext) -> Result<AiArgs, Error> {
     let prompt = ctx.args.first().cloned().unwrap_or_default();
     let name = ctx.flags.get_string("name").unwrap_or_default().to_string();
-    let provider_str = ctx.flags.get_string("provider").unwrap_or("ollama");
+
+    let app_config = crate::services::config::load().unwrap_or_default();
+
+    let provider_str = ctx
+        .flags
+        .get_string("provider")
+        .filter(|s| !s.is_empty())
+        .or(app_config.ai.provider.as_deref())
+        .unwrap_or("ollama");
     let provider = AiProvider::from_str(provider_str)?;
 
     let model = ctx
         .flags
         .get_string("model")
         .map(str::to_owned)
-        .filter(|s| !s.is_empty());
+        .filter(|s| !s.is_empty())
+        .or(app_config.ai.model);
     let endpoint = ctx
         .flags
         .get_string("endpoint")
         .map(str::to_owned)
-        .filter(|s| !s.is_empty());
+        .filter(|s| !s.is_empty())
+        .or(app_config.ai.endpoint);
     let api_key = ctx
         .flags
         .get_string("api-key")
         .map(str::to_owned)
-        .filter(|s| !s.is_empty());
+        .filter(|s| !s.is_empty())
+        .or(app_config.ai.api_key);
 
-    let output = PathBuf::from(ctx.flags.get_string("output").unwrap_or("."));
+    let output_str = ctx
+        .flags
+        .get_string("output")
+        .map(str::to_owned)
+        .filter(|s| !s.is_empty() && s != ".")
+        .or(app_config.defaults.output)
+        .unwrap_or_else(|| ".".to_owned());
+    let output = PathBuf::from(output_str);
+
     let package_name = ctx
         .flags
         .get_string("package-name")

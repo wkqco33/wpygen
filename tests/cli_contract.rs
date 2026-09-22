@@ -354,3 +354,84 @@ fn ai_conflicting_flags_exits_with_code_2() {
     assert_eq!(output.status.code(), Some(2), "{}", stderr(&output));
     assert!(stderr(&output).contains("--dry-run"), "{}", stderr(&output));
 }
+
+#[test]
+fn config_subcommand_help_documents_usage_and_subcommands() {
+    let output = run_wpygen(&["config", "--help"]);
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    let out = stdout(&output);
+    assert!(out.contains("wpygen config [command]"), "{out}");
+    assert!(out.contains("init"), "{out}");
+    assert!(out.contains("show"), "{out}");
+    assert!(out.contains("path"), "{out}");
+    assert!(out.contains("set"), "{out}");
+    assert!(out.contains("get"), "{out}");
+}
+
+#[test]
+fn config_path_prints_path_to_stdout() {
+    let output = run_wpygen(&["config", "path"]);
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    let out = stdout(&output);
+    assert!(out.trim().ends_with("config.toml"), "{out}");
+}
+
+#[test]
+fn config_init_show_set_get_roundtrip_cli() {
+    let root = unique_temp_dir();
+    let config_file = root.join("wpygen/config.toml");
+    let config_path_str = config_file.to_str().unwrap();
+
+    let init_out = Command::new(BINARY)
+        .args(["config", "init"])
+        .env("WPYGEN_CONFIG_PATH", config_path_str)
+        .output()
+        .expect("failed to run wpygen");
+    assert!(init_out.status.success(), "{}", stderr(&init_out));
+    assert!(config_file.exists());
+
+    // 중복 init 시 --force 없으면 실패 (exit code 2)
+    let duplicate_init = Command::new(BINARY)
+        .args(["config", "init"])
+        .env("WPYGEN_CONFIG_PATH", config_path_str)
+        .output()
+        .expect("failed to run wpygen");
+    assert_eq!(duplicate_init.status.code(), Some(2));
+
+    // show 확인
+    let show_out = Command::new(BINARY)
+        .args(["config", "show"])
+        .env("WPYGEN_CONFIG_PATH", config_path_str)
+        .output()
+        .expect("failed to run wpygen");
+    assert!(show_out.status.success(), "{}", stderr(&show_out));
+    assert!(stdout(&show_out).contains("ollama"));
+
+    // set 및 get 확인
+    let set_out = Command::new(BINARY)
+        .args(["config", "set", "ai.provider", "openai"])
+        .env("WPYGEN_CONFIG_PATH", config_path_str)
+        .output()
+        .expect("failed to run wpygen");
+    assert!(set_out.status.success(), "{}", stderr(&set_out));
+
+    let get_out = Command::new(BINARY)
+        .args(["config", "get", "ai.provider"])
+        .env("WPYGEN_CONFIG_PATH", config_path_str)
+        .output()
+        .expect("failed to run wpygen");
+    assert!(get_out.status.success(), "{}", stderr(&get_out));
+    assert_eq!(stdout(&get_out).trim(), "openai");
+
+    // 잘못된 키 설정 시 exit code 2
+    let bad_set = Command::new(BINARY)
+        .args(["config", "set", "bad.key", "value"])
+        .env("WPYGEN_CONFIG_PATH", config_path_str)
+        .output()
+        .expect("failed to run wpygen");
+    assert_eq!(bad_set.status.code(), Some(2));
+
+    let _ = fs::remove_dir_all(root);
+}

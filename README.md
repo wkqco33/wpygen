@@ -197,6 +197,43 @@ wpygen ai --name test_app --dry-run "간단한 웹 스크래퍼 CLI"
 | `--sync` | 생성 후 `uv sync` 실행 |
 | `--lock` | 생성 후 `uv lock` 실행 |
 
+### `config` 커맨드 (설정 관리)
+
+플랫폼별 기본 설정 디렉터리에 `config.toml`을 저장하여, 매번 옵션을 입력하지 않고도 기본 AI 모델, 프로바이더, 엔드포인트 등을 관리할 수 있습니다.
+
+- **Linux/Unix**: `~/.config/wpygen/config.toml`
+- **macOS**: `~/Library/Application Support/wpygen/config.toml`
+- **Windows**: `%APPDATA%\wpygen\config.toml`
+
+```bash
+# 기본 템플릿으로 설정 파일 생성 (--force 로 덮어쓰기 가능)
+wpygen config init
+
+# 현재 설정 파일 내용 출력 (--json 지원)
+wpygen config show
+
+# 설정 파일의 전체 절대 경로 출력
+wpygen config path
+
+# 설정값 변경 및 저장
+wpygen config set ai.provider openai
+wpygen config set ai.model gpt-4o-mini
+wpygen config set ai.api_key sk-...
+
+# 설정값 단일 조회
+wpygen config get ai.provider
+```
+
+#### 지원하는 설정 키
+
+| 키 | 설명 | 기본값 |
+| --- | --- | --- |
+| `ai.provider` | 기본 AI 프로바이더 (`ollama`\|`openai`\|`azure-openai`) | `ollama` |
+| `ai.model` | 기본 AI 모델명 | `llama3.2` |
+| `ai.endpoint` | 기본 API 엔드포인트 URL | 프로바이더 기본 URL |
+| `ai.api_key` | 기본 API 키 | `""` |
+| `defaults.output` | 기본 생성 상위 디렉터리 | `"."` |
+
 ### 전역 플래그
 
 모든 서브커맨드에서 사용할 수 있습니다(clig.dev 표준 묶음).
